@@ -1,0 +1,57 @@
+# Build artifacts
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+
+# Executables
+saraswati
+*.exe
+
+# Dependencies
+vcpkg_installed/
+node_modules/
+
+# Frontend build
+frontend/dist/
+frontend/.vite/
+
+# Config with secrets
+config.json
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Bloom filter persistence
+*.bloom
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+*.gcno
+*.gcda
+
+# Temporary
+tmp/
+temp/

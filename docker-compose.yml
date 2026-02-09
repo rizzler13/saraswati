@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  memgraph:
+    image: memgraph/memgraph-platform:latest
+    container_name: saraswati-memgraph
+    ports:
+      - "7687:7687"   # Bolt protocol
+      - "7444:7444"   # Memgraph Lab
+      - "3000:3000"   # Memgraph Lab UI
+    volumes:
+      - memgraph_data:/var/lib/memgraph
+      - memgraph_log:/var/log/memgraph
+      - ./db:/db:ro   # Schema files
+    environment:
+      - MEMGRAPH_LOG_LEVEL=WARNING
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    mem_limit: 2g
+    memswap_limit: 2g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "echo", ">", "/dev/tcp/localhost/7687"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["--log-level=WARNING", "--memory-limit=1800"]
+
+volumes:
+  memgraph_data:
+  memgraph_log:
