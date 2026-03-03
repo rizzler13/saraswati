@@ -89,27 +89,6 @@ npm run dev
 # Open http://localhost:5173
 ```
 
-## 📊 Memory Budget
-
-| Component | Max RAM |
-|-----------|---------|
-| Memgraph | 2.0 GB |
-| C++ Backend | 0.5 GB |
-| Frontend | 1.0 GB |
-| OS/Other | 4.5 GB |
-| **Total** | **8.0 GB** |
-
-## 📡 API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/papers/trending` | GET | Top papers by score |
-| `/api/clusters` | GET | Concept clusters |
-| `/api/graph` | GET | Graph data for visualization |
-| `/api/crawler/status` | GET | Crawler status |
-| `/api/crawler/pause` | POST | Pause ingestion |
-| `/api/health` | GET | System health |
-
 ## 📁 Project Structure
 
 ```
