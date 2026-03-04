@@ -121,6 +121,6 @@ Copy `config/config.example.json` to `config/config.json` and edit:
 }
 ```
 
-## 📜 License
+## License
 
 MIT License
