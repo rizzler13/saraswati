@@ -10,12 +10,14 @@
 #include "db/MemgraphClient.hpp"
 #include "net/AsyncHttpClient.hpp"
 #include "util/BloomFilter.hpp"
+#include "pipeline/DataPipeline.hpp"
 
 using json = nlohmann::json;
 
-// Global state
 std::atomic<bool> g_running{true};
 std::atomic<bool> g_crawler_paused{false};
+std::atomic<size_t> g_papers_count{0};
+std::atomic<size_t> g_mentions_count{0};
 std::unique_ptr<saraswati::db::MemgraphClient> g_memgraph;
 std::unique_ptr<saraswati::net::AsyncHttpClient> g_http;
 std::unique_ptr<saraswati::util::BloomFilter> g_bloom;
@@ -142,12 +144,15 @@ void run_drogon(const Config& cfg) {
         .setLogLevel(trantor::Logger::kWarn)
         .addListener(cfg.server_host, cfg.server_port)
         .setThreadNum(cfg.server_threads)
-        .enableRunAsDaemon(false)
+        // .enableRunAsDaemon()  // disabled for development
         .run();
 }
 
 void cleanup() {
     std::cout << "[Cleanup] Saving state...\n";
+    
+    // Stop data pipeline first
+    saraswati::pipeline::DataPipeline::instance().stop();
     
     if (g_bloom) {
         g_bloom->save("data/urls.bloom");
@@ -218,6 +223,9 @@ int main(int argc, char* argv[]) {
         cleanup();
         return 0;
     }
+    
+    // Start data pipeline (background thread polls all sources)
+    saraswati::pipeline::DataPipeline::instance().start(60);  // Every 1 minute
     
     // Start Drogon (blocks until shutdown)
     run_drogon(cfg);

@@ -16,9 +16,6 @@ static std::string extract_arxiv(const std::string& text) {
     if (std::regex_search(text, m, arxiv_regex)) return m[1].str();
     return "";
 }
-
-// ============ RedditCrawler ============
-
 std::vector<std::string> RedditCrawler::default_subreddits() {
     return {"MachineLearning", "LocalLLaMA", "science", "artificial", "deeplearning"};
 }
@@ -73,9 +70,6 @@ std::vector<DiscoursePost> RedditCrawler::filter_paper_links(const std::vector<D
     }
     return filtered;
 }
-
-// ============ NitterCrawler ============
-
 std::vector<std::string> NitterCrawler::default_instances() {
     return {"nitter.net", "nitter.it", "nitter.privacydev.net", "nitter.poast.org"};
 }
@@ -127,9 +121,6 @@ std::vector<DiscoursePost> NitterCrawler::parse_timeline(std::string_view html) 
 std::vector<DiscoursePost> NitterCrawler::parse_search(std::string_view html) {
     return parse_timeline(html);  // Same structure
 }
-
-// ============ HackerNewsCrawler ============
-
 std::string HackerNewsCrawler::build_search_url(const std::string& query, int hits) {
     std::string encoded = query;
     size_t pos = 0;
@@ -175,4 +166,4 @@ std::vector<DiscoursePost> HackerNewsCrawler::parse_algolia(std::string_view jso
     return posts;
 }
 
-} // namespace saraswati::crawlers
+}

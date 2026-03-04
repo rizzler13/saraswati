@@ -429,4 +429,4 @@ void MemgraphClient::monitor_loop() {
     }
 }
 
-} // namespace saraswati::db
+}

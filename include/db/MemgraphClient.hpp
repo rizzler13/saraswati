@@ -24,12 +24,11 @@ struct Node;
 struct Relationship;
 
 /**
- * @brief Value type for Cypher query parameters and results
+Value type for Cypher query parameters and results
  */
 class Value {
 public:
     enum class Type { Null, Bool, Int, Double, String, List, Map };
-    
     Value() : type_(Type::Null) {}
     Value(bool b) : type_(Type::Bool), bool_val_(b) {}
     Value(int64_t i) : type_(Type::Int), int_val_(i) {}
@@ -39,17 +38,14 @@ public:
     Value(const char* s) : type_(Type::String), string_val_(s) {}
     Value(std::vector<Value> list) : type_(Type::List), list_val_(std::move(list)) {}
     Value(std::unordered_map<std::string, Value> map) : type_(Type::Map), map_val_(std::move(map)) {}
-    
     Type type() const { return type_; }
     bool is_null() const { return type_ == Type::Null; }
-    
     bool as_bool() const { return bool_val_; }
     int64_t as_int() const { return int_val_; }
     double as_double() const { return double_val_; }
     const std::string& as_string() const { return string_val_; }
     const std::vector<Value>& as_list() const { return list_val_; }
     const std::unordered_map<std::string, Value>& as_map() const { return map_val_; }
-    
 private:
     Type type_;
     bool bool_val_ = false;
@@ -61,7 +57,7 @@ private:
 };
 
 /**
- * @brief Represents a graph node
+Represents a graph node
  */
 struct Node {
     int64_t id;
@@ -70,7 +66,7 @@ struct Node {
 };
 
 /**
- * @brief Represents a graph relationship
+Represents a graph relationship
  */
 struct Relationship {
     int64_t id;
@@ -81,7 +77,7 @@ struct Relationship {
 };
 
 /**
- * @brief Result of a Cypher query
+Result of a Cypher query
  */
 struct QueryResult {
     std::vector<std::string> columns;
@@ -93,7 +89,7 @@ struct QueryResult {
 };
 
 /**
- * @brief Memory statistics from Memgraph
+Memory statistics from Memgraph
  */
 struct MemoryStats {
     size_t used_bytes = 0;
@@ -103,7 +99,7 @@ struct MemoryStats {
 };
 
 /**
- * @brief Connection pool entry
+Connection pool entry
  */
 struct PooledConnection {
 #ifdef HAVE_MGCLIENT
@@ -116,7 +112,7 @@ struct PooledConnection {
 };
 
 /**
- * @brief Thread-safe Memgraph client with connection pooling and memory monitoring
+Thread-safe Memgraph client with connection pooling and memory monitoring
  * 
  * Design constraints (8GB M1 MacBook):
  * - Connection pool capped at 3 connections
@@ -126,15 +122,14 @@ struct PooledConnection {
 class MemgraphClient {
 public:
     using PauseCallback = std::function<void(bool should_pause)>;
-    
     /**
-     * @brief Construct client with connection parameters
-     * @param host Memgraph host (default: localhost)
-     * @param port Memgraph port (default: 7687)
-     * @param username Optional username
-     * @param password Optional password
-     * @param pool_size Connection pool size (default: 3)
-     * @param memory_limit_mb Memory limit in MB that triggers pause (default: 1800)
+    Construct client with connection parameters
+    Memgraph host (default: localhost)
+    Memgraph port (default: 7687)
+    Optional username
+    Optional password
+    Connection pool size (default: 3)
+    Memory limit in MB that triggers pause (default: 1800)
      */
     explicit MemgraphClient(
         const std::string& host = "localhost",
@@ -144,36 +139,30 @@ public:
         size_t pool_size = 3,
         size_t memory_limit_mb = 1800
     );
-    
     ~MemgraphClient();
-    
     // Non-copyable, movable
     MemgraphClient(const MemgraphClient&) = delete;
     MemgraphClient& operator=(const MemgraphClient&) = delete;
     MemgraphClient(MemgraphClient&&) noexcept;
     MemgraphClient& operator=(MemgraphClient&&) noexcept;
-    
     /**
-     * @brief Initialize the connection pool
-     * @return true if at least one connection was established
+    Initialize the connection pool
+    true if at least one connection was established
      */
     bool connect();
-    
     /**
-     * @brief Close all connections
+    Close all connections
      */
     void disconnect();
-    
     /**
-     * @brief Check if connected
+    Check if connected
      */
     bool is_connected() const;
-    
     /**
-     * @brief Execute a Cypher query with parameters
-     * @param query Cypher query string (use $param for parameters)
-     * @param params Query parameters (prevents injection)
-     * @return Query result
+    Execute a Cypher query with parameters
+    Cypher query string (use $param for parameters)
+    Query parameters (prevents injection)
+    Query result
      * 
      * Example:
      *   execute("CREATE (p:Paper {title: $title})", {{"title", "My Paper"}});
@@ -182,52 +171,43 @@ public:
         const std::string& query,
         const std::unordered_map<std::string, Value>& params = {}
     );
-    
     /**
-     * @brief Execute query and return single value
+    Execute query and return single value
      */
     std::optional<Value> execute_scalar(
         const std::string& query,
         const std::unordered_map<std::string, Value>& params = {}
     );
-    
     /**
-     * @brief Begin a transaction
+    Begin a transaction
      */
     bool begin_transaction();
-    
     /**
-     * @brief Commit the current transaction
+    Commit the current transaction
      */
     bool commit();
-    
     /**
-     * @brief Rollback the current transaction
+    Rollback the current transaction
      */
     bool rollback();
-    
     /**
-     * @brief Get current memory statistics
+    Get current memory statistics
      */
     MemoryStats get_memory_stats();
-    
     /**
-     * @brief Check if memory is within safe limits
+    Check if memory is within safe limits
      */
     bool is_memory_safe() const;
-    
     /**
-     * @brief Register callback for pause/resume signals
+    Register callback for pause/resume signals
      */
     void set_pause_callback(PauseCallback callback);
-    
     /**
-     * @brief Start the memory monitoring thread
+    Start the memory monitoring thread
      */
     void start_memory_monitor();
-    
     /**
-     * @brief Stop the memory monitoring thread
+    Stop the memory monitoring thread
      */
     void stop_memory_monitor();
 
@@ -239,25 +219,21 @@ private:
     std::string password_;
     size_t pool_size_;
     size_t memory_limit_mb_;
-    
     // Connection pool
     std::vector<std::unique_ptr<PooledConnection>> pool_;
     std::mutex pool_mutex_;
     std::condition_variable pool_cv_;
     std::atomic<bool> connected_{false};
-    
     // Memory monitoring
     std::unique_ptr<std::thread> monitor_thread_;
     std::atomic<bool> monitor_running_{false};
     std::atomic<bool> memory_exceeded_{false};
     PauseCallback pause_callback_;
     std::mutex callback_mutex_;
-    
     // Internal helpers
     PooledConnection* acquire_connection();
     void release_connection(PooledConnection* conn);
     void monitor_loop();
-    
 #ifdef HAVE_MGCLIENT
     QueryResult execute_on_session(
         mg_session* session,
@@ -268,4 +244,4 @@ private:
 #endif
 };
 
-} // namespace saraswati::db
+}

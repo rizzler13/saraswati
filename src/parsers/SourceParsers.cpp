@@ -8,9 +8,6 @@
 namespace saraswati::parsers {
 
 using json = nlohmann::json;
-
-// ============ ArxivParser ============
-
 std::vector<std::string> ArxivParser::default_categories() {
     return {"cs.AI", "cs.LG", "cs.CL"};
 }
@@ -64,9 +61,6 @@ std::vector<ArxivPaper> ArxivParser::parse_rss(std::string_view rss_content) {
     
     return papers;
 }
-
-// ============ BiorxivParser ============
-
 std::vector<std::string> BiorxivParser::default_keywords() {
     return {"CRISPR", "mRNA", "Longevity", "gene therapy", "immunotherapy"};
 }
@@ -136,9 +130,6 @@ std::vector<BiorxivPaper> BiorxivParser::filter_by_keywords(
     
     return filtered;
 }
-
-// ============ HuggingFaceParser ============
-
 std::string HuggingFaceParser::papers_url() {
     return "https://huggingface.co/papers";
 }
@@ -216,4 +207,4 @@ std::vector<HuggingFacePaper> HuggingFaceParser::parse_api_response(std::string_
     return papers;
 }
 
-} // namespace saraswati::parsers
+}

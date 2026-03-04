@@ -49,4 +49,4 @@ public:
     static std::string front_page_url();
 };
 
-} // namespace saraswati::crawlers
+}

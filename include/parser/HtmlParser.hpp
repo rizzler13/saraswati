@@ -14,7 +14,7 @@
 namespace saraswati::parser {
 
 /**
- * @brief Represents an HTML element in the parsed DOM
+Represents an HTML element in the parsed DOM
  */
 struct HtmlElement {
     std::string tag;
@@ -24,7 +24,6 @@ struct HtmlElement {
     std::string text_content;
     std::string inner_html;
     std::vector<HtmlElement> children;
-    
     // Convenience accessors
     bool has_class(std::string_view cls) const;
     std::optional<std::string> get_attribute(std::string_view name) const;
@@ -32,19 +31,16 @@ struct HtmlElement {
 };
 
 /**
- * @brief CSS selector result
+CSS selector result
  */
 struct SelectorResult {
     std::vector<HtmlElement> elements;
     bool success = false;
     std::string error_message;
-    
     bool empty() const { return elements.empty(); }
     size_t size() const { return elements.size(); }
-    
     HtmlElement& operator[](size_t i) { return elements[i]; }
     const HtmlElement& operator[](size_t i) const { return elements[i]; }
-    
     auto begin() { return elements.begin(); }
     auto end() { return elements.end(); }
     auto begin() const { return elements.begin(); }
@@ -52,7 +48,7 @@ struct SelectorResult {
 };
 
 /**
- * @brief Low-memory HTML parser using Google Gumbo
+Low-memory HTML parser using Google Gumbo
  * 
  * Design constraints (8GB M1 MacBook):
  * - Streaming-friendly: parse partial HTML
@@ -63,37 +59,31 @@ class HtmlParser {
 public:
     HtmlParser();
     ~HtmlParser();
-    
     // Non-copyable, movable
     HtmlParser(const HtmlParser&) = delete;
     HtmlParser& operator=(const HtmlParser&) = delete;
     HtmlParser(HtmlParser&&) noexcept;
     HtmlParser& operator=(HtmlParser&&) noexcept;
-    
     /**
-     * @brief Parse HTML string
-     * @param html HTML content to parse
-     * @return true if parsed successfully
+    Parse HTML string
+    HTML content to parse
+    true if parsed successfully
      */
     bool parse(std::string_view html);
-    
     /**
-     * @brief Parse HTML from file
+    Parse HTML from file
      */
     bool parse_file(const std::string& path);
-    
     /**
-     * @brief Check if HTML is currently parsed
+    Check if HTML is currently parsed
      */
     bool is_parsed() const;
-    
     /**
-     * @brief Clear parsed content and free memory
+    Clear parsed content and free memory
      */
     void clear();
-    
     /**
-     * @brief Select all elements matching a simple CSS selector
+    Select all elements matching a simple CSS selector
      * 
      * Supported selectors:
      * - tag: "div", "a", "p"
@@ -103,58 +93,49 @@ public:
      * - tag[attr]: "a[href]"
      * - tag[attr=value]: "a[rel=author]"
      * 
-     * @param selector CSS selector string
-     * @return Matching elements
+    CSS selector string
+    Matching elements
      */
     SelectorResult select_all(std::string_view selector) const;
-    
     /**
-     * @brief Select first element matching selector
+    Select first element matching selector
      */
     std::optional<HtmlElement> select_first(std::string_view selector) const;
-    
     /**
-     * @brief Get text content of first matching element
+    Get text content of first matching element
      */
     std::optional<std::string> select_text(std::string_view selector) const;
-    
     /**
-     * @brief Get attribute value of first matching element
+    Get attribute value of first matching element
      */
     std::optional<std::string> select_attribute(
         std::string_view selector,
         std::string_view attribute
     ) const;
-    
     /**
-     * @brief Get all text content from document
+    Get all text content from document
      */
     std::string get_all_text() const;
-    
     /**
-     * @brief Get document title
+    Get document title
      */
     std::optional<std::string> get_title() const;
-    
     /**
-     * @brief Get all links (href values)
+    Get all links (href values)
      */
     std::vector<std::string> get_links() const;
-    
     /**
-     * @brief Get meta content by name
+    Get meta content by name
      */
     std::optional<std::string> get_meta(std::string_view name) const;
-    
     /**
-     * @brief Get root element
+    Get root element
      */
     std::optional<HtmlElement> root() const;
 
 private:
 #ifdef HAVE_GUMBO
     GumboOutput* output_ = nullptr;
-    
     // Internal traversal helpers
     HtmlElement convert_node(const GumboNode* node) const;
     void collect_matching(
@@ -163,7 +144,6 @@ private:
         std::vector<HtmlElement>& results
     ) const;
     std::string get_node_text(const GumboNode* node) const;
-    
     // Selector parsing
     struct ParsedSelector {
         std::string tag;
@@ -176,12 +156,11 @@ private:
     ParsedSelector parse_selector(std::string_view selector) const;
     bool node_matches_selector(const GumboNode* node, const ParsedSelector& sel) const;
 #endif
-    
     std::string cached_html_; // Keep source for complex operations
 };
 
 /**
- * @brief XML/RSS parser (subset for ArXiv feeds)
+XML/RSS parser (subset for ArXiv feeds)
  */
 class XmlParser {
 public:
@@ -195,14 +174,12 @@ public:
         std::vector<XmlElement> find_all_children(std::string_view tag) const;
         std::optional<std::string> get_child_text(std::string_view tag) const;
     };
-    
     /**
-     * @brief Parse XML/RSS content
+    Parse XML/RSS content
      */
     static std::optional<XmlElement> parse(std::string_view xml);
-    
     /**
-     * @brief Parse RSS feed and extract items
+    Parse RSS feed and extract items
      */
     struct RssItem {
         std::string title;
@@ -213,8 +190,7 @@ public:
         std::vector<std::string> categories;
         std::unordered_map<std::string, std::string> dc_fields; // Dublin Core
     };
-    
     static std::vector<RssItem> parse_rss(std::string_view xml);
 };
 
-} // namespace saraswati::parser
+}

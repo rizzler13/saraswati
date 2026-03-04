@@ -1,5 +1,12 @@
 #include "net/AsyncHttpClient.hpp"
-
+#pragma once
+#include <memory>
+#include <string>
+#include <vector>
+#include <functional>
+#include <thread>  // <--- ADD THIS LINE (It was missing)
+#include <mutex>
+// ... rest of imports
 #include <iostream>
 #include <sstream>
 #include <regex>
@@ -440,4 +447,4 @@ size_t AsyncHttpClient::header_callback(char* ptr, size_t size, size_t nmemb, vo
     return bytes;
 }
 
-} // namespace saraswati::net
+}

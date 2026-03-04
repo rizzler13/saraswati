@@ -11,6 +11,7 @@ public:
     ADD_METHOD_TO(GraphController::getGraph, "/api/graph", drogon::Get);
     ADD_METHOD_TO(GraphController::getPaper, "/api/papers/{arxiv_id}", drogon::Get);
     ADD_METHOD_TO(GraphController::search, "/api/search", drogon::Get);
+    ADD_METHOD_TO(GraphController::getDiscourse, "/api/discourse", drogon::Get);
     METHOD_LIST_END
 
     void getTrending(const drogon::HttpRequestPtr& req,
@@ -24,6 +25,8 @@ public:
                   const std::string& arxiv_id);
     void search(const drogon::HttpRequestPtr& req,
                 std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+    void getDiscourse(const drogon::HttpRequestPtr& req,
+                      std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 };
 
 class CrawlerController : public drogon::HttpController<CrawlerController> {
@@ -50,12 +53,15 @@ public:
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(HealthController::health, "/api/health", drogon::Get);
     ADD_METHOD_TO(HealthController::stats, "/api/stats", drogon::Get);
+    ADD_METHOD_TO(HealthController::statsDetail, "/api/stats/detail", drogon::Get);
     METHOD_LIST_END
 
     void health(const drogon::HttpRequestPtr& req,
                 std::function<void(const drogon::HttpResponsePtr&)>&& callback);
     void stats(const drogon::HttpRequestPtr& req,
                std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+    void statsDetail(const drogon::HttpRequestPtr& req,
+                     std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 };
 
-} // namespace saraswati::controllers
+}

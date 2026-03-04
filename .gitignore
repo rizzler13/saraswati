@@ -1,3 +1,16 @@
+# Vendored deps
+mgclient/
+
+# Runtime data
+data/*.bloom
+uploads/
+logs/*.log
+
+# Agent config
+.agent/
+.agents/
+.gemini/
+
 # Build artifacts
 build/
 cmake-build-*/

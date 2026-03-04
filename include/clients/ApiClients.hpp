@@ -34,16 +34,13 @@ public:
 class GeminiClient {
 public:
     explicit GeminiClient(const std::string& api_key, const std::string& model = "gemini-1.5-flash");
-    
     std::optional<ConceptExtraction> extract_concepts(const std::string& abstract);
     std::optional<std::string> summarize(const std::string& text, int max_words = 50);
-    
     static ConceptExtraction parse_extraction(std::string_view json);
-    
 private:
     std::string api_key_;
     std::string model_;
     std::string build_url() const;
 };
 
-} // namespace saraswati::clients
+}

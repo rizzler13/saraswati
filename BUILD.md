@@ -1,4 +1,4 @@
-# Build Instructions for Project Saraswati
+# Build & Run — Project Saraswati
 
 ## Prerequisites (macOS M1)
 
@@ -21,7 +21,6 @@ brew install drogon
 ### 2. Install mgclient (Memgraph C Client)
 
 ```bash
-# Clone and build mgclient
 git clone https://github.com/memgraph/mgclient.git
 cd mgclient
 mkdir build && cd build
@@ -30,88 +29,113 @@ make -j$(sysctl -n hw.ncpu)
 sudo make install
 ```
 
-### 3. Start Memgraph
-
-```bash
-# From project root
-docker compose up -d
-
-# Verify it's running
-docker ps | grep memgraph
-
-# Initialize schema (first time only)
-cat db/schema.cypher | docker exec -i saraswati-memgraph mgconsole
-```
-
----
-
-## Build the Backend
-
-```bash
-# Create build directory
-mkdir -p build && cd build
-
-# Configure with CMake
-cmake .. -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3
-
-# Build
-ninja
-
-# Run
-./saraswati --config ../config/config.json
-```
-
-### Debug Build
-
-```bash
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Debug
-ninja
-```
-
-### With Tests
-
-```bash
-cmake .. -G Ninja -DBUILD_TESTS=ON
-ninja
-ctest --output-on-failure
-```
-
----
-
-## Build the Frontend
+### 3. Install Frontend Dependencies
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
+```
 
-# Development server
+---
+
+## Quick Start (3 steps)
+
+```bash
+# 1. Database
+docker compose up -d
+
+# 2. Backend  (port 8080)
+cd build && ninja && ./saraswati --config ../config/config.example.json
+
+# 3. Frontend (port 5173, in a new terminal)
+cd frontend && npm run dev
+```
+
+Open **http://localhost:5173**
+
+---
+
+## Full Commands
+
+### Build Backend
+
+```bash
+mkdir -p build && cd build
+cmake .. -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3
+ninja
+```
+
+### Start Memgraph
+
+```bash
+docker compose up -d
+
+# Verify
+docker ps --filter name=saraswati
+
+# Initialize schema (first time only)
+cat db/schema.cypher | docker exec -i saraswati-db mgconsole
+```
+
+### Run Backend
+
+```bash
+cd build
+./saraswati --config ../config/config.example.json
+```
+
+### Run Frontend
+
+```bash
+cd frontend
 npm run dev
+```
 
-# Production build
-npm run build
+### Stop Everything
+
+```bash
+pkill -f './saraswati'      # backend
+pkill -f 'vite'             # frontend
+docker compose down         # database
+```
+
+---
+
+## Agent Workflows
+
+If you're using the Gemini agent, these slash commands are available:
+
+| Command | What it does |
+|---|---|
+| `/start` | Start full stack (DB → Backend → Frontend) |
+| `/build` | Build C++ backend with CMake + Ninja |
+| `/rebuild` | Rebuild + restart backend |
+| `/stop` | Stop all services |
+
+---
+
+## Debug Build
+
+```bash
+cd build
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Debug
+ninja
 ```
 
 ---
 
 ## Memory Verification
 
-Monitor RAM usage during operation:
-
 ```bash
-# Terminal 1: Watch system memory
-htop
-
-# Terminal 2: Watch Memgraph specifically
-docker stats saraswati-memgraph --no-stream
+# Watch Memgraph memory
+docker stats saraswati-db --no-stream
 
 # Expected limits:
 # - Memgraph container: < 2GB
-# - saraswati process: < 500MB
-# - Total system: < 4GB (leaving 4GB for OS)
+# - saraswati process:  < 500MB
+# - Total system:       < 4GB (leaving 4GB for OS)
 ```
 
 ---
@@ -120,22 +144,23 @@ docker stats saraswati-memgraph --no-stream
 
 ### mgclient not found
 ```bash
-# Check if installed
 ls /opt/homebrew/lib/libmgclient*
-
-# Add to CMake manually if needed
 cmake .. -DMGCLIENT_LIBRARY=/opt/homebrew/lib/libmgclient.dylib \
          -DMGCLIENT_INCLUDE_DIR=/opt/homebrew/include
 ```
 
 ### Drogon not found
 ```bash
-# Ensure pkg-config can find it
 export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
 ```
 
 ### OpenSSL version conflict
 ```bash
-# Force Homebrew's OpenSSL
 cmake .. -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3
+```
+
+### Port already in use
+```bash
+lsof -i :8080    # find what's on the backend port
+lsof -i :5173    # find what's on the frontend port
 ```

@@ -26,7 +26,7 @@
                 "cs.LG",
                 "cs.CL"
             ],
-            "poll_interval_seconds": 300
+            "poll_interval_seconds": 60
         },
         "biorxiv": {
             "enabled": true,
@@ -35,11 +35,11 @@
                 "mRNA",
                 "Longevity"
             ],
-            "poll_interval_seconds": 600
+            "poll_interval_seconds": 60
         },
         "huggingface": {
             "enabled": true,
-            "poll_interval_seconds": 300
+            "poll_interval_seconds": 60
         }
     },
     "discourse": {
@@ -50,7 +50,7 @@
                 "LocalLLaMA",
                 "science"
             ],
-            "poll_interval_seconds": 120
+            "poll_interval_seconds": 60
         },
         "twitter": {
             "enabled": true,
@@ -64,11 +64,11 @@
                 "yannlecun",
                 "AndrewYNg"
             ],
-            "poll_interval_seconds": 180
+            "poll_interval_seconds": 120
         },
         "hackernews": {
             "enabled": true,
-            "poll_interval_seconds": 120
+            "poll_interval_seconds": 60
         }
     },
     "enrichment": {

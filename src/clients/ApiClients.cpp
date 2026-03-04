@@ -5,9 +5,6 @@
 namespace saraswati::clients {
 
 using json = nlohmann::json;
-
-// ============ SemanticScholarClient ============
-
 std::string SemanticScholarClient::build_url(const std::string& arxiv_id) {
     return "https://api.semanticscholar.org/graph/v1/paper/arXiv:" + arxiv_id +
            "?fields=citationCount,influentialCitationCount,referenceCount,title,year,fieldsOfStudy";
@@ -41,9 +38,6 @@ std::optional<CitationData> SemanticScholarClient::parse_response(std::string_vi
         return std::nullopt;
     }
 }
-
-// ============ GeminiClient ============
-
 GeminiClient::GeminiClient(const std::string& api_key, const std::string& model)
     : api_key_(api_key), model_(model) {}
 
@@ -93,4 +87,4 @@ ConceptExtraction GeminiClient::parse_extraction(std::string_view json_str) {
     return result;
 }
 
-} // namespace saraswati::clients
+}

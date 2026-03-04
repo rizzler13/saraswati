@@ -67,4 +67,4 @@ public:
     static std::string papers_url();
 };
 
-} // namespace saraswati::parsers
+}

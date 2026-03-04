@@ -1,197 +1,185 @@
 #include "controllers/Controllers.hpp"
+#include "pipeline/DataPipeline.hpp"
 #include <drogon/drogon.h>
 #include <nlohmann/json.hpp>
+
+#ifdef __APPLE__
+#include <mach/mach.h>
+#else
+#include <sys/resource.h>
+#endif
+
+extern std::atomic<bool> g_crawler_paused;
+extern std::atomic<size_t> g_papers_count;
+extern std::atomic<size_t> g_mentions_count;
 
 namespace saraswati::controllers {
 
 using json = nlohmann::json;
 using namespace drogon;
 
-// Placeholder for global state (in production, use dependency injection)
-extern std::atomic<bool> g_crawler_paused;
-extern std::atomic<size_t> g_papers_count;
-extern std::atomic<size_t> g_mentions_count;
-
-// ============ GraphController ============
-
-void GraphController::getTrending(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    // Query Memgraph for trending papers
-    std::string cypher = R"(
-        MATCH (p:Paper)
-        OPTIONAL MATCH (p)-[m:MENTIONED_ON]->(:Platform)
-        WITH p, count(m) as mentions, coalesce(p.citation_count, 0) as citations
-        WITH p, mentions + citations as score
-        ORDER BY score DESC
-        LIMIT 50
-        RETURN p.arxiv_id as id, p.title as title, p.abstract as abstract,
-               p.published_date as date, score
-    )";
-    
-    // Mock response for now
-    json response = json::array();
-    response.push_back({
-        {"id", "2401.12345"},
-        {"title", "Example Paper Title"},
-        {"abstract", "This is an example abstract..."},
-        {"date", "2024-01-15"},
-        {"score", 42}
-    });
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
+// Serialize to string and return as a JSON content-type response.
+static HttpResponsePtr makeJsonResponse(const json& j) {
+    auto resp = HttpResponse::newHttpResponse();
+    resp->setContentTypeCode(CT_APPLICATION_JSON);
+    resp->setBody(j.dump());
     resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    return resp;
+}
+
+static size_t getProcessMemoryMB() {
+#ifdef __APPLE__
+    mach_task_basic_info_data_t info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
+                  (task_info_t)&info, &count) == KERN_SUCCESS) {
+        return info.resident_size / (1024 * 1024);
+    }
+    return 0;
+#else
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) == 0) {
+        return usage.ru_maxrss / 1024;  // Linux: KB, macOS: bytes (handled above)
+    }
+    return 0;
+#endif
+}
+void GraphController::getTrending(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_trending_papers(50);
+    callback(makeJsonResponse(response));
 }
 
 void GraphController::getClusters(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    std::string cypher = R"(
-        MATCH (c:Concept)<-[:BELONGS_TO]-(p:Paper)
-        WITH c, count(p) as paper_count
-        ORDER BY paper_count DESC
-        LIMIT 20
-        RETURN c.name as concept, paper_count
-    )";
-    
-    json response = json::array();
-    response.push_back({{"concept", "Large Language Models"}, {"count", 125}});
-    response.push_back({{"concept", "Transformer Architecture"}, {"count", 89}});
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_trending_topics();
+    callback(makeJsonResponse(response));
 }
 
 void GraphController::getGraph(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    std::string cypher = R"(
-        MATCH (p:Paper)-[r]->(target)
-        WHERE p.hype_score > 0 OR p.citation_count > 0
-        RETURN p, r, target
-        LIMIT 500
-    )";
-    
-    json response = {
-        {"nodes", json::array()},
-        {"edges", json::array()}
-    };
-    
-    // Mock nodes
-    response["nodes"].push_back({
-        {"id", "paper_1"}, {"type", "Paper"}, {"label", "GPT-4"}, {"size", 30}
-    });
-    response["nodes"].push_back({
-        {"id", "concept_1"}, {"type", "Concept"}, {"label", "LLM"}, {"size", 50}
-    });
-    
-    // Mock edges
-    response["edges"].push_back({
-        {"source", "paper_1"}, {"target", "concept_1"}, {"type", "BELONGS_TO"}
-    });
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_graph_data();
+    callback(makeJsonResponse(response));
 }
 
 void GraphController::getPaper(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, const std::string& arxiv_id) {
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto papers = pipeline.get_trending_papers(500);
+
+    for (const auto& p : papers) {
+        if (p["id"] == arxiv_id) {
+            callback(makeJsonResponse(p));
+            return;
+        }
+    }
+
     json response = {
         {"arxiv_id", arxiv_id},
-        {"title", "Paper Title for " + arxiv_id},
-        {"abstract", "Abstract content..."},
-        {"authors", json::array({"Author 1", "Author 2"})},
-        {"citation_count", 15},
+        {"title", "Paper not in cache: " + arxiv_id},
+        {"abstract", "This paper is not currently in the pipeline cache. It may appear after the next fetch cycle."},
+        {"authors", json::array()},
+        {"citation_count", 0},
         {"mentions", json::array()}
     };
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
 void GraphController::search(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query = req->getParameter("q");
-    
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto all_papers = pipeline.get_trending_papers(500);
+
+    json results = json::array();
+    std::string lower_query = query;
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+
+    for (const auto& p : all_papers) {
+        std::string title = p.value("title", "");
+        std::string lower_title = title;
+        std::transform(lower_title.begin(), lower_title.end(), lower_title.begin(), ::tolower);
+
+        if (lower_title.find(lower_query) != std::string::npos) {
+            results.push_back(p);
+        }
+    }
+
     json response = {
         {"query", query},
-        {"results", json::array()}
+        {"results", results}
     };
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
-// ============ CrawlerController ============
-
-std::atomic<bool> g_crawler_paused{false};
-std::atomic<size_t> g_papers_count{0};
-std::atomic<size_t> g_mentions_count{0};
-
+void GraphController::getDiscourse(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_discourse(50);
+    callback(makeJsonResponse(response));
+}
 void CrawlerController::getStatus(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto stats = pipeline.get_stats();
     json response = {
         {"paused", g_crawler_paused.load()},
-        {"papers_ingested", g_papers_count.load()},
-        {"mentions_tracked", g_mentions_count.load()},
+        {"papers_ingested", pipeline.paper_count()},
+        {"mentions_tracked", pipeline.mention_count()},
         {"active_threads", 4},
-        {"memory_usage_mb", 512}
+        {"memory_usage_mb", getProcessMemoryMB()},
+        {"last_fetch", pipeline.last_fetch_time()},
+        {"sources", stats.value("sources", json::object())}
     };
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
 void CrawlerController::pause(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     g_crawler_paused = true;
     json response = {{"status", "paused"}, {"success", true}};
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
 void CrawlerController::resume(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     g_crawler_paused = false;
     json response = {{"status", "running"}, {"success", true}};
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
 void CrawlerController::trigger(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    // Trigger immediate crawl
+    std::thread([]() {
+        pipeline::DataPipeline::instance().fetch_now();
+    }).detach();
+
     json response = {{"status", "triggered"}, {"success", true}};
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
-
-// ============ HealthController ============
-
 void HealthController::health(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    auto& pipeline = pipeline::DataPipeline::instance();
     json response = {
         {"status", "healthy"},
         {"version", "1.0.0"},
         {"uptime_seconds", 3600},
-        {"memgraph", {{"connected", true}, {"memory_mb", 512}}},
-        {"crawler", {{"paused", g_crawler_paused.load()}}}
+        {"memgraph", {{"connected", true}, {"memory_mb", getProcessMemoryMB()}}},
+        {"crawler", {{"paused", g_crawler_paused.load()}}},
+        {"pipeline", {
+            {"papers", pipeline.paper_count()},
+            {"mentions", pipeline.mention_count()},
+            {"last_fetch", pipeline.last_fetch_time()}
+        }}
     };
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    callback(makeJsonResponse(response));
 }
 
 void HealthController::stats(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    json response = {
-        {"papers_total", g_papers_count.load()},
-        {"mentions_total", g_mentions_count.load()},
-        {"concepts_total", 150},
-        {"authors_total", 500},
-        {"papers_today", 42},
-        {"trending_topics", json::array({"LLM", "RLHF", "Diffusion"})}
-    };
-    
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
-    callback(resp);
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_stats();
+    callback(makeJsonResponse(response));
 }
 
-} // namespace saraswati::controllers
+void HealthController::statsDetail(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    std::string type = req->getParameter("type");
+    if (type.empty()) type = "papers";
+
+    auto& pipeline = pipeline::DataPipeline::instance();
+    auto response = pipeline.get_stats_detail(type);
+    callback(makeJsonResponse(response));
+}
+
+}

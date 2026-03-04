@@ -32,7 +32,7 @@ uint64_t murmur3_64(const void* key, size_t len, uint64_t seed) {
     h1 ^= len; h2 ^= len; h1 += h2; h2 += h1;
     return fmix64(h1) + fmix64(h2);
 }
-} // namespace hash
+}
 
 size_t BloomFilter::calculate_num_bits(size_t n, double p) {
     double ln2 = std::log(2.0);
@@ -141,4 +141,4 @@ void BloomFilter::set_bit(size_t idx) { bits_[idx/64] |= (1ULL << (idx%64)); }
 bool BloomFilter::get_bit(size_t idx) const { return (bits_[idx/64] & (1ULL << (idx%64))) != 0; }
 size_t BloomFilter::count_set_bits() const { size_t c=0; for(auto w:bits_) c+=__builtin_popcountll(w); return c; }
 
-} // namespace saraswati::util
+}
