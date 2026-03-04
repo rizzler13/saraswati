@@ -1,4 +1,4 @@
-# Project Saraswati
+# Saraswati
 
 **Real-time Research Radar** — Monitors global scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters in a 3D dashboard.
 
@@ -6,7 +6,7 @@
 ![C++](https://img.shields.io/badge/C++-20-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🎯 Features
+## Features
 
 - **Paper Detection**: Monitors ArXiv, BioRxiv, and HuggingFace for new research
 - **Discourse Tracking**: Follows scientific discussions on Reddit, Twitter/X, and Hacker News
@@ -14,7 +14,7 @@
 - **3D Visualization**: Force-directed graph showing idea clusters
 - **Memory Efficient**: Designed for 8GB M1 MacBook Air
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -37,7 +37,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
