@@ -1,60 +1,53 @@
-# Saraswati
+# Project Saraswati
 
-**Real-time Research Radar** — Monitors global scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters in a 3D dashboard.
-
-![Status](https://img.shields.io/badge/status-alpha-orange)
-![C++](https://img.shields.io/badge/C++-20-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+Real-time Research Radar — Monitors global scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters in a 3D dashboard.
 
 ## Features
 
-- **Paper Detection**: Monitors ArXiv, BioRxiv, and HuggingFace for new research
-- **Discourse Tracking**: Follows scientific discussions on Reddit, Twitter/X, and Hacker News
-- **Knowledge Graph**: Stores relationships in Memgraph (papers, authors, concepts)
-- **3D Visualization**: Force-directed graph showing idea clusters
-- **Memory Efficient**: Designed for 8GB M1 MacBook Air
+- Paper Detection: Monitors ArXiv, BioRxiv, and HuggingFace for new research.
+- Discourse Tracking: Follows scientific discussions on Reddit, Twitter/X, and Hacker News.
+- Knowledge Graph: Stores relationships in Memgraph (papers, authors, concepts).
+- 3D Visualization: Force-directed graph showing idea clusters.
+- Memory Efficient: Designed to run efficiently on standard consumer hardware.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Frontend (React)                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │  PaperList  │  │ StatsPanel  │  │    3D GraphView     │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ REST API
-┌────────────────────────▼────────────────────────────────────┐
-│                  Backend (C++/Drogon)                       │
-│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌────────────┐  │
-│  │ Crawlers │  │  Parsers  │  │   API    │  │ Enrichment │  │
-│  └──────────┘  └───────────┘  └──────────┘  └────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ Cypher
-┌────────────────────────▼────────────────────────────────────┐
-│                  Memgraph (Docker)                          │
-│         [:WROTE] [:BELONGS_TO] [:MENTIONED_ON]              │
-└─────────────────────────────────────────────────────────────┘
-```
+Frontend (React): PaperList, StatsPanel, 3D GraphView
+Backend (C++ / Drogon): Crawlers, Parsers, API, Enrichment
+Database (Memgraph): Knowledge graph storage via Docker
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker Desktop
-- Homebrew (macOS)
 - Node.js 18+
+- CMake and a recent C++20 compiler (Clang/GCC/MSVC)
+- Package managers: Homebrew (macOS) or vcpkg (Windows)
 
 ### 1. Install Dependencies
 
+**macOS:**
 ```bash
-# Install brew packages
 brew install cmake ninja curl openssl@3 nlohmann-json gumbo-parser drogon
 
-# Build mgclient (Memgraph driver)
+# Build mgclient (Memgraph C Client)
 git clone https://github.com/memgraph/mgclient.git /tmp/mgclient
 cd /tmp/mgclient && mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/opt/homebrew && make -j4 && sudo make install
+cmake .. -DCMAKE_INSTALL_PREFIX=/opt/homebrew && make -j$(sysctl -n hw.ncpu) && sudo make install
+```
+
+**Windows (vcpkg):**
+Ensure you have `vcpkg` properly set up first.
+```cmd
+vcpkg install drogon curl nlohmann-json openssl gumbo
+
+# Build mgclient (Memgraph C Client)
+git clone https://github.com/memgraph/mgclient.git C:\temp\mgclient
+cd C:\temp\mgclient
+mkdir build && cd build
+cmake .. 
+cmake --build . --config Release --target install
 ```
 
 ### 2. Start Memgraph
@@ -65,10 +58,18 @@ docker compose up -d
 
 ### 3. Build Backend
 
+**macOS / Linux:**
 ```bash
 mkdir build && cd build
 cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja
+```
+
+**Windows:**
+```cmd
+mkdir build && cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
 ```
 
 ### 4. Start Frontend
@@ -79,47 +80,23 @@ npm install
 npm run dev
 ```
 
-### 5. Run
+### 5. Run Backend
 
+**macOS/Linux:**
 ```bash
-# Terminal 1: Backend
-./build/saraswati --config config/config.json
-
-# Terminal 2: Frontend (already running from step 4)
-# Open http://localhost:5173
+./build/saraswati --config config/config.example.json
 ```
 
-## 📁 Project Structure
-
-```
-saraswati/
-├── src/
-│   ├── main.cpp              # Entry point
-│   ├── db/                   # Memgraph client
-│   ├── net/                  # HTTP client
-│   ├── parsers/              # Source parsers
-│   ├── crawlers/             # Discourse crawlers
-│   ├── clients/              # External APIs
-│   └── controllers/          # REST API
-├── include/                  # Headers
-├── frontend/                 # React dashboard
-├── config/                   # Configuration
-└── db/                       # Schema files
+**Windows:**
+```cmd
+.\build\Release\saraswati.exe --config config\config.example.json
 ```
 
-## 🔧 Configuration
+Frontend is already running from step 4. Open http://localhost:5173 to access the dashboard.
 
-Copy `config/config.example.json` to `config/config.json` and edit:
+## Configuration
 
-```json
-{
-  "memgraph": { "host": "localhost", "port": 7687 },
-  "crawler": { "max_threads": 8, "rate_limit_ms": 2000 },
-  "sources": {
-    "arxiv": { "enabled": true, "feeds": ["cs.AI", "cs.LG"] }
-  }
-}
-```
+Copy `config/config.example.json` to `config/config.json` and adjust the parameters.
 
 ## License
 
