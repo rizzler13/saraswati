@@ -1,0 +1,35 @@
+# Caddyfile — Reverse proxy for Saraswati Backend
+#
+# Replace {$DOMAIN} with your actual domain or use environment variable.
+# For DuckDNS: saraswati.duckdns.org
+# For custom domain: api.yourdomain.com
+#
+# Caddy auto-provisions Let's Encrypt TLS certificates.
+
+{$DOMAIN:localhost} {
+    # Reverse proxy all traffic to the backend container
+    reverse_proxy backend:8080
+
+    # CORS headers for frontend
+    header {
+        Access-Control-Allow-Origin {$FRONTEND_URL:*}
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+        Access-Control-Max-Age "3600"
+    }
+
+    # Handle CORS preflight
+    @options method OPTIONS
+    respond @options 204
+
+    # Compression
+    encode gzip zstd
+
+    # Logging
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}

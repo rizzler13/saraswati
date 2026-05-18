@@ -221,47 +221,38 @@ void DataPipeline::fetch_nitter() {
     std::vector<crawlers::DiscoursePost> new_posts;
 
     for (const auto& instance : instances) {
-        bool instance_works = false;
+        int fetch_count = 0;
 
         for (const auto& user : influencers) {
             std::string url = crawlers::NitterCrawler::build_user_url(instance, user);
             auto resp = g_http->get_sync(url);
 
-            if (!resp.success || resp.body.empty()) continue;
-            instance_works = true;
+            if (!resp.success || resp.body.empty()) {
+                std::cerr << "[Pipeline] X/Twitter @" << user << " via " << instance
+                          << " failed (HTTP " << resp.status_code << "): " << resp.error_message << "\n";
+                continue;
+            }
 
             auto posts = crawlers::NitterCrawler::parse_timeline(resp.body);
             for (auto& p : posts) {
-                p.author = user;
+                if (p.author.empty()) p.author = user;
                 p.is_influencer = true;
                 new_posts.push_back(std::move(p));
             }
+            fetch_count += posts.size();
         }
 
-        // Also search for AI research topics
-        std::vector<std::string> queries = {
-            "arxiv machine learning",
-            "new AI paper",
-            "LLM breakthrough",
-            "transformer architecture"
-        };
-
-        for (const auto& q : queries) {
-            std::string url = crawlers::NitterCrawler::build_search_url(instance, q);
-            auto resp = g_http->get_sync(url);
-
-            if (!resp.success || resp.body.empty()) continue;
-
-            auto posts = crawlers::NitterCrawler::parse_search(resp.body);
-            for (auto& p : posts) {
-                new_posts.push_back(std::move(p));
-            }
+        if (fetch_count > 0) {
+            std::cout << "[Pipeline] X/Twitter (" << instance << "): " << fetch_count << " posts from "
+                      << influencers.size() << " accounts\n";
+            break;  // Found working instance, stop trying others
+        } else {
+            std::cerr << "[Pipeline] X/Twitter instance " << instance << " returned 0 posts, trying next...\n";
         }
+    }
 
-        if (instance_works) {
-            std::cout << "[Pipeline] Nitter (" << instance << "): " << new_posts.size() << " tweets\n";
-            break;  // Found working instance
-        }
+    if (new_posts.empty()) {
+        std::cerr << "[Pipeline] X/Twitter: all instances failed — no posts collected\n";
     }
 
     {
@@ -295,9 +286,14 @@ void DataPipeline::fetch_hackernews() {
         std::string url = crawlers::HackerNewsCrawler::build_search_url(q, 30);
         auto resp = g_http->get_sync(url);
 
-        if (!resp.success || resp.body.empty()) continue;
+        if (!resp.success || resp.body.empty()) {
+            std::cerr << "[Pipeline] HN search '" << q << "' failed (HTTP "
+                      << resp.status_code << "): " << resp.error_message << "\n";
+            continue;
+        }
 
         auto posts = crawlers::HackerNewsCrawler::parse_algolia(resp.body);
+        std::cout << "[Pipeline] HN search '" << q << "': " << posts.size() << " stories\n";
         for (auto& p : posts) {
             new_posts.push_back(std::move(p));
         }

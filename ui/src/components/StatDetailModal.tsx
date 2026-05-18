@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { API_BASE_URL } from '../config'
 
 interface StatDetailModalProps {
     type: 'papers' | 'mentions' | 'topics'
@@ -60,7 +61,7 @@ export function StatDetailModal({ type, onClose }: StatDetailModalProps) {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        fetch(`/api/stats/detail?type=${type}`)
+        fetch(`${API_BASE_URL}/api/stats/detail?type=${type}`)
             .then((r) => r.json())
             .then((d) => { setData(d); setLoading(false) })
             .catch(() => setLoading(false))

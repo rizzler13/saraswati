@@ -51,7 +51,7 @@ cd build && ninja && ./saraswati --config ../config/config.example.json
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173**
+
 
 ---
 

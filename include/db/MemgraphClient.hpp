@@ -11,6 +11,7 @@
 #include <atomic>
 #include <thread>
 #include <unordered_map>
+#include <any>
 
 #ifdef HAVE_MGCLIENT
 #include <mgclient.h>
@@ -37,7 +38,7 @@ public:
     Value(std::string&& s) : type_(Type::String), string_val_(std::move(s)) {}
     Value(const char* s) : type_(Type::String), string_val_(s) {}
     Value(std::vector<Value> list) : type_(Type::List), list_val_(std::move(list)) {}
-    Value(std::unordered_map<std::string, Value> map) : type_(Type::Map), map_val_(std::move(map)) {}
+    Value(std::unordered_map<std::string, Value> map) : type_(Type::Map), any_map_val_(std::move(map)) {}
     Type type() const { return type_; }
     bool is_null() const { return type_ == Type::Null; }
     bool as_bool() const { return bool_val_; }
@@ -45,7 +46,7 @@ public:
     double as_double() const { return double_val_; }
     const std::string& as_string() const { return string_val_; }
     const std::vector<Value>& as_list() const { return list_val_; }
-    const std::unordered_map<std::string, Value>& as_map() const { return map_val_; }
+    const std::unordered_map<std::string, Value>& as_map() const { return *std::any_cast<std::unordered_map<std::string, Value>>(&any_map_val_); }
 private:
     Type type_;
     bool bool_val_ = false;
@@ -53,7 +54,7 @@ private:
     double double_val_ = 0.0;
     std::string string_val_;
     std::vector<Value> list_val_;
-    std::unordered_map<std::string, Value> map_val_;
+    std::any any_map_val_;
 };
 
 /**

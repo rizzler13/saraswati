@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { API_BASE_URL } from '../config'
 
 interface UsePollingResult<T> {
     data: T | null
@@ -15,9 +16,11 @@ export function usePolling<T>(
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<Error | null>(null)
 
+    const fullUrl = `${API_BASE_URL}${url}`
+
     const fetchData = useCallback(async () => {
         try {
-            const response = await fetch(url)
+            const response = await fetch(fullUrl)
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
             const json = await response.json()
             setData(json)
@@ -27,7 +30,7 @@ export function usePolling<T>(
         } finally {
             setIsLoading(false)
         }
-    }, [url])
+    }, [fullUrl])
 
     useEffect(() => {
         fetchData()

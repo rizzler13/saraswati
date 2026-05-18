@@ -32,23 +32,32 @@ std::string HtmlElement::get_text() const {
 
 // HtmlParser Implementation
 
-HtmlParser::HtmlParser() : output_(nullptr) {}
+HtmlParser::HtmlParser() {
+#ifdef HAVE_GUMBO
+    output_ = nullptr;
+#endif
+}
 
 HtmlParser::~HtmlParser() {
     clear();
 }
 
 HtmlParser::HtmlParser(HtmlParser&& other) noexcept 
-    : output_(other.output_), cached_html_(std::move(other.cached_html_)) {
+    : cached_html_(std::move(other.cached_html_)) {
+#ifdef HAVE_GUMBO
+    output_ = other.output_;
     other.output_ = nullptr;
+#endif
 }
 
 HtmlParser& HtmlParser::operator=(HtmlParser&& other) noexcept {
     if (this != &other) {
         clear();
+#ifdef HAVE_GUMBO
         output_ = other.output_;
-        cached_html_ = std::move(other.cached_html_);
         other.output_ = nullptr;
+#endif
+        cached_html_ = std::move(other.cached_html_);
     }
     return *this;
 }

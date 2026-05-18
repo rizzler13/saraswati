@@ -1,19 +1,17 @@
-version: '3.8'
-
 services:
   memgraph:
     image: memgraph/memgraph-platform:latest
     container_name: saraswati-memgraph
     ports:
-      - "7687:7687"   # Bolt protocol
-      - "7444:7444"   # Memgraph Lab
-      - "3000:3000"   # Memgraph Lab UI
+      - "7687:7687" # Bolt protocol
+      - "7444:7444" # Memgraph Lab
+      - "3000:3000" # Memgraph Lab UI
     volumes:
       - memgraph_data:/var/lib/memgraph
       - memgraph_log:/var/log/memgraph
-      - ./db:/db:ro   # Schema files
+      - ./db:/db:ro # Schema files
     environment:
-      - MEMGRAPH_LOG_LEVEL=WARNING
+      - MEMGRAPH="--log-level=WARNING --memory-limit=1800"
     deploy:
       resources:
         limits:
@@ -24,12 +22,39 @@ services:
     memswap_limit: 2g
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "echo", ">", "/dev/tcp/localhost/7687"]
+      test: [ "CMD", "echo", ">", "/dev/tcp/localhost/7687" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["--log-level=WARNING", "--memory-limit=1800"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: saraswati-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      memgraph:
+        condition: service_healthy
+    volumes:
+      - ./config:/etc/saraswati/config:ro
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: saraswati-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   memgraph_data:

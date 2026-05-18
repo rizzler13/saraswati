@@ -34,8 +34,8 @@ else()
     message(STATUS "Found mgclient: ${MGCLIENT_LIBRARY}")
 endif()
 
-find_library(GUMBO_LIBRARY NAMES gumbo PATHS /usr/local/lib /opt/homebrew/lib)
-find_path(GUMBO_INCLUDE_DIR NAMES gumbo.h PATHS /usr/local/include /opt/homebrew/include)
+find_library(GUMBO_LIBRARY NAMES gumbo)
+find_path(GUMBO_INCLUDE_DIR NAMES gumbo.h)
 
 if(NOT GUMBO_LIBRARY OR NOT GUMBO_INCLUDE_DIR)
     message(WARNING "Gumbo not found. HTML parsing will be disabled.")

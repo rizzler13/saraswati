@@ -27,51 +27,37 @@ interface GraphViewProps {
     onConceptClick?: (label: string) => void
 }
 
-// Muted, desaturated palette — subtle and easy on the eyes
+const TOPIC_COLORS: Record<string, string> = {
+    'LLM': '#6a8faa', 'Transformers': '#5e7d95',
+    'Reinforcement Learning': '#6a9a7a', 'RLHF': '#5e8a6a',
+    'Diffusion Models': '#7a6e95', 'Diffusion': '#6e6088',
+    'Mixture of Experts': '#957a6a', 'MoE': '#886a5a',
+    'Computer Vision': '#95906a',
+    'NLP': '#5a7d7d',
+    'RAG': '#957080',
+    'Agents': '#5a8888',
+    'Fine-Tuning': '#7878aa',
+    'Multimodal': '#aa8858',
+    'Reasoning': '#6a9a82',
+    'Code Generation': '#6a6a95',
+    'Safety & Alignment': '#956a72',
+    'Interpretability': '#7d9a6a',
+    'Embeddings': '#6a7d95',
+    'Optimization': '#957a6a',
+    'Neural Architecture': '#6e7d88',
+    'Quantization': '#8888',
+    'Robotics': '#6a887d',
+}
 
-const NODE_COLORS = [
-    '#7a8fa6', '#8b7e72', '#7d8a6e', '#8a7d96', '#6e8a8a',
-    '#968a7d', '#7a7d96', '#8a6e7d', '#6e8a7a', '#7d968a',
-    '#96817d', '#7d8196', '#8a7d6e', '#6e7d8a', '#7d8a81',
-    '#917d8a', '#6e8a85', '#8a856e', '#7d6e8a', '#858a7d',
-    '#8a7d7d', '#6e858a', '#7d8a6e', '#8a6e85', '#7d8a96',
-    '#857d8a', '#6e8a6e', '#8a7d85', '#7d968a', '#8a856e',
+const MUTED_PALETTE = [
+    '#6e7d8a', '#7d7268', '#6e7d62', '#7d6e88', '#627d7d',
+    '#887d68', '#6e6e88', '#7d627a', '#627d6e', '#6e887d',
 ]
 
 function hashColor(str: string): string {
     let hash = 0
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash)
-        hash = hash & hash
-    }
-    return NODE_COLORS[Math.abs(hash) % NODE_COLORS.length]
-}
-
-const topicColors: Record<string, string> = {
-    'LLM': '#6a9fb5', 'Transformers': '#5e8aaa',
-    'Reinforcement Learning': '#6aaa80', 'RLHF': '#5e9a70',
-    'Diffusion Models': '#8a7aaa', 'Diffusion': '#7a6a9a',
-    'Mixture of Experts': '#aa7a6a', 'MoE': '#9a6a5a',
-    'Computer Vision': '#aa9a6a',
-    'NLP': '#5a8a8a',
-    'RAG': '#aa7a8a',
-    'Agents': '#5a9a9a',
-    'Fine-Tuning': '#8a8aaa',
-    'Multimodal': '#aa8a5a',
-    'Reasoning': '#6aaa8a',
-    'Code Generation': '#6a6aaa',
-    'Safety & Alignment': '#aa6a7a',
-    'Interpretability': '#8aaa6a',
-    'Embeddings': '#6a8aaa',
-    'Optimization': '#aa7a6a',
-    'Neural Architecture': '#7a8a96',
-    'Quantization': '#9a9a6a',
-    'Robotics': '#6a9a8a',
-    'Federated Learning': '#5a6a7a',
-    'World Models': '#5a6aaa',
-    'Synthetic Data': '#5a8a6a',
-    'Speech & Audio': '#8a6a5a',
-    'Graph Neural Networks': '#5a7a8a',
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
+    return MUTED_PALETTE[Math.abs(hash) % MUTED_PALETTE.length]
 }
 
 function guessTopic(paper: Paper): string {
@@ -92,6 +78,7 @@ function guessTopic(paper: Paper): string {
     if (title.includes('safety') || title.includes('alignment')) return 'Safety & Alignment'
     return 'LLM'
 }
+
 interface FGNode {
     id: string
     label: string
@@ -104,6 +91,8 @@ interface FGNode {
     y?: number
     vx?: number
     vy?: number
+    fx?: number
+    fy?: number
 }
 
 interface FGLink {
@@ -123,12 +112,11 @@ function buildForceGraphData(graphData: GraphData, papers?: Paper[] | null) {
         const deg = degreeMap.get(n.id) || 1
         let color: string
         if (n.type === 'Concept') {
-            color = topicColors[n.label] || hashColor(n.label)
+            color = TOPIC_COLORS[n.label] || hashColor(n.label)
         } else if (n.paperId && papers) {
             const paper = papers.find(p => p.id === n.paperId)
             if (paper) {
-                const topic = guessTopic(paper)
-                color = topicColors[topic] || hashColor(n.label)
+                color = TOPIC_COLORS[guessTopic(paper)] || hashColor(n.label)
             } else {
                 color = hashColor(n.label)
             }
@@ -136,19 +124,10 @@ function buildForceGraphData(graphData: GraphData, papers?: Paper[] | null) {
             color = hashColor(n.label)
         }
 
-        // Size: concepts are bigger, scale by degree
-        const baseSize = n.type === 'Concept' ? 6 : 3
-        const nodeSize = Math.min(baseSize + deg * 1.5, 18)
+        const baseSize = n.type === 'Concept' ? 8 : 3
+        const nodeSize = Math.min(baseSize + deg * 1.2, 16)
 
-        return {
-            id: n.id,
-            label: n.label,
-            type: n.type,
-            color,
-            nodeSize,
-            paperId: n.paperId,
-            degree: deg,
-        }
+        return { id: n.id, label: n.label, type: n.type, color, nodeSize, paperId: n.paperId, degree: deg }
     })
 
     const nodeIds = new Set(nodes.map(n => n.id))
@@ -158,6 +137,8 @@ function buildForceGraphData(graphData: GraphData, papers?: Paper[] | null) {
 
     return { nodes, links }
 }
+
+// ─── Timeline View ──────────────────────────────────
 function TimelineView({ papers, onPaperClick }: { papers: Paper[]; onPaperClick?: (paperId: string) => void }) {
     const sorted = useMemo(() =>
         [...papers].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20),
@@ -169,7 +150,7 @@ function TimelineView({ papers, onPaperClick }: { papers: Paper[]; onPaperClick?
             <div className="timeline-line" />
             {sorted.map((paper, i) => {
                 const topic = guessTopic(paper)
-                const color = topicColors[topic] || '#6a9fb5'
+                const color = TOPIC_COLORS[topic] || '#6a8faa'
                 return (
                     <div key={paper.id}
                         className={`timeline-item ${i % 2 === 0 ? 'left' : 'right'}`}
@@ -178,7 +159,7 @@ function TimelineView({ papers, onPaperClick }: { papers: Paper[]; onPaperClick?
                     >
                         <div className="timeline-dot" style={{
                             background: color,
-                            boxShadow: `0 0 8px ${color}66`
+                            boxShadow: `0 0 6px ${color}44`
                         }} />
                         <div className="timeline-card">
                             <div className="timeline-date">{paper.date}</div>
@@ -196,6 +177,7 @@ function TimelineView({ papers, onPaperClick }: { papers: Paper[]; onPaperClick?
         </div>
     )
 }
+
 function EmptyState({ message }: { message?: string }) {
     return (
         <div style={{
@@ -203,12 +185,14 @@ function EmptyState({ message }: { message?: string }) {
             height: '100%', flexDirection: 'column', gap: '16px', color: 'var(--text-muted)'
         }}>
             <div className="loading-spinner" />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 12 }}>
                 {message || 'Waiting for data…'}
             </span>
         </div>
     )
 }
+
+// ─── Force Graph Canvas ─────────────────────────────
 function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
     graphData: GraphData
     papers?: Paper[] | null
@@ -219,6 +203,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
     const containerRef = useRef<HTMLDivElement>(null)
     const [hoveredNode, setHoveredNode] = useState<string | null>(null)
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+    const [settled, setSettled] = useState(false)
 
     const prevDataRef = useRef<{ nodes: FGNode[]; links: FGLink[] } | null>(null)
     const initialZoomDone = useRef(false)
@@ -233,35 +218,32 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
         return () => observer.disconnect()
     }, [])
 
+    // Build graph data with position persistence
     const { fgData, adjacency } = useMemo(() => {
         const fresh = buildForceGraphData(graphData, papers)
         const prev = prevDataRef.current
 
         if (prev) {
-            // Build a position map from previous nodes
-            const posMap = new Map<string, { x?: number; y?: number; vx?: number; vy?: number }>()
+            const posMap = new Map<string, { x?: number; y?: number; fx?: number; fy?: number }>()
             for (const n of prev.nodes) {
                 if (n.x !== undefined && n.y !== undefined) {
-                    posMap.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy })
+                    posMap.set(n.id, { x: n.x, y: n.y, fx: n.x, fy: n.y })
                 }
             }
-
-            // Carry positions forward to matching node IDs
+            // Pin existing nodes so the layout stays stable on data refresh
             for (const node of fresh.nodes) {
                 const pos = posMap.get(node.id)
                 if (pos) {
                     node.x = pos.x
                     node.y = pos.y
-                    node.vx = pos.vx
-                    node.vy = pos.vy
+                    node.fx = pos.fx
+                    node.fy = pos.fy
                 }
             }
         }
 
-        // Store reference for next update
         prevDataRef.current = fresh
 
-        // Build adjacency for hover highlighting
         const adj = new Map<string, Set<string>>()
         fresh.nodes.forEach(n => adj.set(n.id, new Set()))
         fresh.links.forEach(l => {
@@ -272,27 +254,37 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
         return { fgData: fresh, adjacency: adj }
     }, [graphData, papers])
 
+    // Configure physics once on data load — then let it settle
     useEffect(() => {
         const fg = fgRef.current
         if (!fg || fgData.nodes.length === 0) return
 
-        fg.d3Force('charge')?.strength(-200).distanceMax(400)
+        fg.d3Force('charge')?.strength(-180).distanceMax(350)
+        fg.d3Force('link')?.distance(90).strength(0.4)
+        fg.d3Force('center')?.strength(0.03)
 
-        fg.d3Force('link')?.distance(80).strength(0.3)
+        // Don't reheat if graph already settled and we're just refreshing data
+        if (!settled) {
+            fg.d3ReheatSimulation()
+        }
+    }, [fgData, settled])
 
-        fg.d3Force('center')?.strength(0.05)
-
-        fg.d3ReheatSimulation()
-    }, [fgData])
-
+    // Initial zoom-to-fit and freeze after settling
     useEffect(() => {
         if (initialZoomDone.current) return
         const timer = setTimeout(() => {
             if (fgRef.current && fgData.nodes.length > 0) {
-                fgRef.current.zoomToFit(400, 60)
+                fgRef.current.zoomToFit(600, 80)
                 initialZoomDone.current = true
+                setSettled(true)
+
+                // Unpin all nodes after settling so dragging works
+                for (const node of fgData.nodes) {
+                    node.fx = undefined
+                    node.fy = undefined
+                }
             }
-        }, 2000)
+        }, 3000)
         return () => clearTimeout(timer)
     }, [fgData])
 
@@ -305,59 +297,70 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
     const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
         const linked = isLinked(node.id)
         const isHovered = node.id === hoveredNode
+        const isConcept = node.type === 'Concept'
         const r = node.nodeSize / globalScale * 3
 
         ctx.save()
 
-        // Opacity: fade non-connected when hovering
+        // Dim unrelated nodes on hover
         if (hoveredNode && !linked) {
             ctx.globalAlpha = 0.12
         } else {
-            ctx.globalAlpha = 0.85
+            ctx.globalAlpha = isConcept ? 1 : 0.85
         }
 
-        // Subtle outer glow for hovered / concept nodes
-        if (isHovered || (node.type === 'Concept' && linked)) {
+        // Subtle shadow on hover
+        if (isHovered) {
             ctx.shadowColor = node.color
-            ctx.shadowBlur = isHovered ? 12 : 5
+            ctx.shadowBlur = 8
         }
 
-        // Main circle
+        // Draw node — concept nodes get a ring, paper nodes are solid circles
         ctx.beginPath()
         ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
-        ctx.fillStyle = node.color
-        ctx.fill()
 
-        // Subtle border
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-        ctx.lineWidth = 0.3
-        ctx.stroke()
+        if (isConcept) {
+            // Concept nodes: solid fill + ring border for visual weight
+            ctx.fillStyle = `${node.color}88`
+            ctx.fill()
+            ctx.strokeStyle = node.color
+            ctx.lineWidth = 1.8 / globalScale
+            ctx.stroke()
+        } else {
+            // Paper nodes: solid circles
+            ctx.fillStyle = `${node.color}cc`
+            ctx.fill()
+        }
 
-        // Always show labels on Concept nodes (they're structural hubs)
-        const showLabel = isHovered || node.type === 'Concept'
+        // Label logic: always show concepts, show papers on hover
+        const showLabel = isHovered || isConcept
         if (showLabel) {
             ctx.shadowBlur = 0
-            ctx.globalAlpha = isHovered ? 1 : 0.7
+            ctx.globalAlpha = isHovered ? 1 : 0.8
             const label = node.label || ''
-            const fontSize = Math.max((isHovered ? 12 : 10) / globalScale, 2.5)
-            ctx.font = `${isHovered ? 600 : 500} ${fontSize}px "JetBrains Mono", monospace`
+            const displayLabel = isConcept ? label : (label.length > 35 ? label.slice(0, 32) + '…' : label)
+            const fontSize = Math.max((isHovered ? 12 : 10) / globalScale, 2)
+            ctx.font = `${isHovered ? 600 : 500} ${fontSize}px Inter, sans-serif`
             ctx.textAlign = 'center'
             ctx.textBaseline = 'bottom'
 
-            // Background box
-            const textWidth = ctx.measureText(label).width
-            const padding = fontSize * 0.3
-            ctx.fillStyle = isHovered ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)'
-            ctx.fillRect(
-                node.x - textWidth / 2 - padding,
-                node.y - r - fontSize - padding * 2,
-                textWidth + padding * 2,
-                fontSize + padding * 2
-            )
+            const textWidth = ctx.measureText(displayLabel).width
+            const pad = fontSize * 0.3
 
-            // Label text
-            ctx.fillStyle = isHovered ? '#e0e0e0' : '#b0b0b0'
-            ctx.fillText(label, node.x, node.y - r - padding)
+            // Label background pill
+            const bgX = node.x - textWidth / 2 - pad * 2
+            const bgY = node.y - r - fontSize - pad * 2
+            const bgW = textWidth + pad * 4
+            const bgH = fontSize + pad * 2
+            const bgR = 3 / globalScale
+
+            ctx.fillStyle = isHovered ? 'rgba(12,13,16,0.9)' : 'rgba(12,13,16,0.7)'
+            ctx.beginPath()
+            ctx.roundRect(bgX, bgY, bgW, bgH, bgR)
+            ctx.fill()
+
+            ctx.fillStyle = isHovered ? '#e0e4ec' : '#b0b8c8'
+            ctx.fillText(displayLabel, node.x, node.y - r - pad)
         }
 
         ctx.restore()
@@ -380,19 +383,18 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
 
         if (hoveredNode) {
             if (isConnected) {
-                const sourceNode = typeof link.source === 'object' ? link.source : null
-                ctx.strokeStyle = sourceNode?.color || 'rgba(255,255,255,0.25)'
-                ctx.lineWidth = 1.0 / globalScale
-                ctx.globalAlpha = 0.5
+                ctx.strokeStyle = 'rgba(200,208,220,0.3)'
+                ctx.lineWidth = 0.8 / globalScale
+                ctx.globalAlpha = 0.6
             } else {
-                ctx.strokeStyle = 'rgba(255,255,255,0.03)'
+                ctx.strokeStyle = 'rgba(200,208,220,0.03)'
                 ctx.lineWidth = 0.3 / globalScale
-                ctx.globalAlpha = 0.2
+                ctx.globalAlpha = 0.15
             }
         } else {
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)'
-            ctx.lineWidth = 0.5 / globalScale
-            ctx.globalAlpha = 0.5
+            ctx.strokeStyle = 'rgba(200,208,220,0.1)'
+            ctx.lineWidth = 0.4 / globalScale
+            ctx.globalAlpha = 0.4
         }
 
         ctx.stroke()
@@ -417,7 +419,6 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
                 backgroundColor="transparent"
                 nodeCanvasObject={paintNode}
                 nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
-                    // Use a generous minimum hit area so nodes are easy to hover/click
                     const r = Math.max((node.nodeSize / globalScale) * 3, 6 / globalScale)
                     ctx.beginPath()
                     ctx.arc(node.x, node.y, r + 4 / globalScale, 0, 2 * Math.PI)
@@ -428,17 +429,22 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
                 onNodeHover={(node: any) => setHoveredNode(node?.id || null)}
                 onNodeClick={handleNodeClick}
                 onBackgroundClick={() => setHoveredNode(null)}
-                d3AlphaDecay={0.02}
-                d3VelocityDecay={0.3}
-                cooldownTicks={300}
-                warmupTicks={200}
+                d3AlphaDecay={0.05}
+                d3AlphaMin={0.08}
+                d3VelocityDecay={0.55}
+                cooldownTicks={150}
+                warmupTicks={100}
                 enableZoomInteraction={true}
                 enablePanInteraction={true}
                 enableNodeDrag={true}
+                minZoom={0.3}
+                maxZoom={6}
             />
         </div>
     )
 }
+
+// ─── Main Graph View ────────────────────────────────
 type ViewMode = '3d' | 'timeline'
 
 export function GraphView({ graphData, papers, onPaperClick, onConceptClick }: GraphViewProps) {
@@ -454,7 +460,7 @@ export function GraphView({ graphData, papers, onPaperClick, onConceptClick }: G
                         className={`graph-button ${activeView === mode ? 'active' : ''}`}
                         onClick={() => setActiveView(mode)}
                     >
-                        {mode === '3d' ? '◉ Network Graph' : '◷ Timeline'}
+                        {mode === '3d' ? '◉ Network' : '◷ Timeline'}
                     </button>
                 ))}
                 {activeView === '3d' && hasData && (

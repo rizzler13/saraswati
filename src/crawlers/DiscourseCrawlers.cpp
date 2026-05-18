@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <regex>
 #include <algorithm>
+#include <iostream>
 
 namespace saraswati::crawlers {
 
@@ -71,55 +72,93 @@ std::vector<DiscoursePost> RedditCrawler::filter_paper_links(const std::vector<D
     return filtered;
 }
 std::vector<std::string> NitterCrawler::default_instances() {
-    return {"nitter.net", "nitter.it", "nitter.privacydev.net", "nitter.poast.org"};
+    // Twitter syndication API — returns timeline HTML with embedded JSON in __NEXT_DATA__
+    return {"syndication.twitter.com"};
 }
 
 std::vector<std::string> NitterCrawler::default_influencers() {
-    return {"karpathy", "ylecun", "AndrewYNg", "goodaborb", "sama", "ilyasut"};
+    return {"karpathy", "ylecun", "AndrewYNg", "sama", "ilyasut", "_jasonwei", "gaborb"};
 }
 
 std::string NitterCrawler::build_search_url(const std::string& instance, const std::string& query) {
-    std::string encoded_query = query;
-    // Simple URL encoding for spaces
-    size_t pos = 0;
-    while ((pos = encoded_query.find(' ', pos)) != std::string::npos) {
-        encoded_query.replace(pos, 1, "%20");
-        pos += 3;
-    }
-    return "https://" + instance + "/search?f=tweets&q=" + encoded_query;
+    // syndication.twitter.com doesn't support search — return empty
+    return "";
 }
 
 std::string NitterCrawler::build_user_url(const std::string& instance, const std::string& username) {
-    return "https://" + instance + "/" + username;
+    // Twitter syndication embed timeline endpoint
+    return "https://" + instance + "/srv/timeline-profile/screen-name/" + username;
 }
 
-std::vector<DiscoursePost> NitterCrawler::parse_timeline(std::string_view html) {
+std::vector<DiscoursePost> NitterCrawler::parse_timeline(std::string_view response_body) {
     std::vector<DiscoursePost> posts;
     
-    parser::HtmlParser parser;
-    if (!parser.parse(html)) return posts;
+    // Extract __NEXT_DATA__ JSON from syndication.twitter.com response
+    std::string body_str(response_body);
+    const std::string marker = "__NEXT_DATA__";
+    auto marker_pos = body_str.find(marker);
+    if (marker_pos == std::string::npos) return posts;
     
-    auto tweets = parser.select_all(".timeline-item");
+    // Find the JSON content between > and </script>
+    auto json_start = body_str.find('>', marker_pos);
+    if (json_start == std::string::npos) return posts;
+    json_start++; // skip '>'
     
-    for (const auto& tweet : tweets) {
-        DiscoursePost post;
-        post.platform = "twitter";
+    auto json_end = body_str.find("</script>", json_start);
+    if (json_end == std::string::npos) return posts;
+    
+    std::string json_str = body_str.substr(json_start, json_end - json_start);
+    
+    try {
+        auto j = json::parse(json_str);
         
-        std::string text = tweet.get_text();
-        post.content = text;
-        post.arxiv_id = extract_arxiv(text);
+        // Navigate: props.pageProps.timeline.entries[]
+        if (!j.contains("props") || !j["props"].contains("pageProps")) return posts;
+        auto& page = j["props"]["pageProps"];
+        if (!page.contains("timeline") || !page["timeline"].contains("entries")) return posts;
         
-        if (!post.arxiv_id.empty()) {
-            post.paper_url = "https://arxiv.org/abs/" + post.arxiv_id;
-            posts.push_back(std::move(post));
+        auto& entries = page["timeline"]["entries"];
+        for (const auto& entry : entries) {
+            if (!entry.contains("content") || !entry["content"].contains("tweet")) continue;
+            auto& tweet = entry["content"]["tweet"];
+            
+            DiscoursePost post;
+            post.platform = "twitter";
+            post.id = tweet.value("id_str", "");
+            post.content = tweet.value("full_text", tweet.value("text", ""));
+            post.title = post.content.substr(0, std::min(post.content.size(), size_t(120)));
+            post.score = tweet.value("favorite_count", 0) + tweet.value("retweet_count", 0);
+            post.created_at = tweet.value("created_at", "");
+            
+            // Extract author from user object
+            if (tweet.contains("user")) {
+                post.author = tweet["user"].value("screen_name", "");
+            }
+            
+            // Build URL from permalink
+            std::string permalink = tweet.value("permalink", "");
+            if (!permalink.empty()) {
+                post.url = "https://x.com" + permalink;
+            }
+            
+            post.arxiv_id = extract_arxiv(post.content);
+            if (!post.arxiv_id.empty()) {
+                post.paper_url = "https://arxiv.org/abs/" + post.arxiv_id;
+            }
+            
+            if (!post.content.empty()) {
+                posts.push_back(std::move(post));
+            }
         }
+    } catch (const std::exception& e) {
+        std::cerr << "[NitterCrawler] JSON parse error: " << e.what() << "\n";
     }
     
     return posts;
 }
 
-std::vector<DiscoursePost> NitterCrawler::parse_search(std::string_view html) {
-    return parse_timeline(html);  // Same structure
+std::vector<DiscoursePost> NitterCrawler::parse_search(std::string_view data) {
+    return parse_timeline(data);
 }
 std::string HackerNewsCrawler::build_search_url(const std::string& query, int hits) {
     std::string encoded = query;

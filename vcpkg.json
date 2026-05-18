@@ -8,13 +8,16 @@
     "curl",
     "nlohmann-json",
     "openssl",
-    "gtest"
+    "gtest",
+    "gumbo"
   ],
   "features": {
     "tests": {
       "description": "Build unit tests",
-      "dependencies": ["gtest"]
+      "dependencies": [
+        "gtest"
+      ]
     }
   },
-  "builtin-baseline": "2024.01.12"
+  "builtin-baseline": "dd306f32e07d87fdb16837af64f33b6b415c770a"
 }

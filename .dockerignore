@@ -1,0 +1,11 @@
+build/
+ui/dist/
+ui/node_modules/
+data/
+logs/
+.git/
+.vscode/
+.DS_Store
+.ninja_log
+.ninja_deps
+compile_commands.json

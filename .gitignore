@@ -12,6 +12,7 @@ logs/*.log
 .gemini/
 
 # Build artifacts
+.cache/
 build/
 cmake-build-*/
 out/
@@ -40,11 +41,13 @@ vcpkg_installed/
 node_modules/
 
 # Frontend build
-frontend/dist/
-frontend/.vite/
+ui/dist/
+ui/.vite/
 
 # Config with secrets
 config.json
+config/config.json
+deploy/.env
 .env
 .env.local
 .env.*.local

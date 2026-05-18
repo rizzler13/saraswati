@@ -1,5 +1,6 @@
 #include "net/AsyncHttpClient.hpp"
 #pragma once
+#include <condition_variable>
 #include <memory>
 #include <string>
 #include <vector>

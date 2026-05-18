@@ -16,87 +16,69 @@ Frontend (React): PaperList, StatsPanel, 3D GraphView
 Backend (C++ / Drogon): Crawlers, Parsers, API, Enrichment
 Database (Memgraph): Knowledge graph storage via Docker
 
-## Quick Start
+## Quick Start (Docker - Recommended)
+
+The easiest way to run Project Saraswati on **any operating system** (Windows, macOS, Linux) is using Docker. This avoids needing to install C++ compilers or database instances locally.
 
 ### Prerequisites
 
-- Docker Desktop
-- Node.js 18+
-- CMake and a recent C++20 compiler (Clang/GCC/MSVC)
-- Package managers: Homebrew (macOS) or vcpkg (Windows)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Docker Compose (Linux)
 
-### 1. Install Dependencies
+### 1-Click Start
 
-**macOS:**
-```bash
-brew install cmake ninja curl openssl@3 nlohmann-json gumbo-parser drogon
+Clone the repository and double-click the script for your OS (or run it in your terminal):
 
-# Build mgclient (Memgraph C Client)
-git clone https://github.com/memgraph/mgclient.git /tmp/mgclient
-cd /tmp/mgclient && mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/opt/homebrew && make -j$(sysctl -n hw.ncpu) && sudo make install
-```
+- **macOS / Linux:** Run `./start.sh`
+- **Windows:** Double-click `start.bat` (or run it in Command Prompt)
 
-**Windows (vcpkg):**
-Ensure you have `vcpkg` properly set up first.
-```cmd
-vcpkg install drogon curl nlohmann-json openssl gumbo
+This single script will:
+1. Start the Memgraph database.
+2. Build the C++ Backend natively within an isolated Ubuntu container.
+3. Build the React/Vite Frontend statically and serve it securely via Nginx.
+4. Auto-open your web browser to http://localhost:5173
 
-# Build mgclient (Memgraph C Client)
-git clone https://github.com/memgraph/mgclient.git C:\temp\mgclient
-cd C:\temp\mgclient
-mkdir build && cd build
-cmake .. 
-cmake --build . --config Release --target install
-```
+### Useful Commands
 
-### 2. Start Memgraph
+- **Frontend Dashboard**: Open http://localhost:5173
+- **Backend API**: Running on http://localhost:8080
+- **Memgraph Lab UI**: Open http://localhost:3000 to query the graph visually.
 
-```bash
-docker compose up -d
-```
+## Manual Build (Local Environment)
 
-### 3. Build Backend
-
-**macOS / Linux:**
-```bash
-mkdir build && cd build
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
-ninja
-```
-
-**Windows:**
-```cmd
-mkdir build && cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE="C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-```
-
-### 4. Start Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### 5. Run Backend
-
-**macOS/Linux:**
-```bash
-./build/saraswati --config config/config.example.json
-```
-
-**Windows:**
-```cmd
-.\build\Release\saraswati.exe --config config\config.example.json
-```
-
-Frontend is already running from step 4. Open http://localhost:5173 to access the dashboard.
+For developers wanting to build the backend manually and work on the raw C++ code externally from Docker, please refer to the detailed guide in [BUILD.md](BUILD.md).
 
 ## Configuration
 
-Copy `config/config.example.json` to `config/config.json` and adjust the parameters.
+Copy `config/config.example.json` to `config/config.json` before building, and adjust the parameters as needed to fit your crawler rate limits.
+
+## Production Deployment
+
+Saraswati is designed for **$0/month deployment** using free cloud services:
+
+| Component | Platform | Cost |
+|:--|:--|:--|
+| Frontend | [Netlify](https://netlify.com) (static CDN) | Free |
+| Backend + DB | [Oracle Cloud](https://cloud.oracle.com/free) Always Free ARM VM | Free |
+| HTTPS | [Caddy](https://caddyserver.com) + Let's Encrypt | Free |
+| CI/CD | GitHub Actions | Free |
+
+### Deploy in 3 Steps
+
+1. **Provision server:** Create an Oracle Cloud Always Free ARM VM, then run:
+   ```bash
+   ssh ubuntu@<your-vm-ip> 'bash -s' < deploy/setup-server.sh
+   ```
+
+2. **Configure:** Edit `deploy/.env` with your domain and API keys.
+
+3. **Launch:**
+   ```bash
+   cd deploy && docker compose -f docker-compose.prod.yml up -d --build
+   ```
+
+4. **Frontend:** Connect your GitHub repo to Netlify with base directory `ui` and env var `VITE_API_URL=https://api.yourdomain.com`.
+
+See [`deploy/`](deploy/) for all production configuration files.
 
 ## License
 
