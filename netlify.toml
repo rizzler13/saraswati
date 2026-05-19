@@ -3,7 +3,7 @@
   command = "npm ci && npm run build"
   publish = "dist"
 
-# SPA client-side routing — all paths serve index.html
+# SPA redirect: all paths serve index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"

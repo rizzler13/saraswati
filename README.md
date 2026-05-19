@@ -1,6 +1,6 @@
 # Project Saraswati
 
-Real-time Research Radar — Monitors global scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters in a 3D dashboard.
+Real-time Research Radar. Monitors scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters.
 
 ## Features
 

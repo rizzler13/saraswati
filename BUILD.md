@@ -1,4 +1,4 @@
-# Build & Run — Project Saraswati
+# Build & Run: Project Saraswati
 
 ## Prerequisites (macOS M1)
 

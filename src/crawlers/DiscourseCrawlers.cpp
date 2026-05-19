@@ -72,7 +72,7 @@ std::vector<DiscoursePost> RedditCrawler::filter_paper_links(const std::vector<D
     return filtered;
 }
 std::vector<std::string> NitterCrawler::default_instances() {
-    // Twitter syndication API — returns timeline HTML with embedded JSON in __NEXT_DATA__
+    // Twitter syndication API - returns timeline HTML with JSON in __NEXT_DATA__
     return {"syndication.twitter.com"};
 }
 
@@ -81,7 +81,7 @@ std::vector<std::string> NitterCrawler::default_influencers() {
 }
 
 std::string NitterCrawler::build_search_url(const std::string& instance, const std::string& query) {
-    // syndication.twitter.com doesn't support search — return empty
+    // syndication.twitter.com doesn't support search, return empty
     return "";
 }
 

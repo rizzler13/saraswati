@@ -1,4 +1,4 @@
-# Caddyfile — Reverse proxy for Saraswati Backend
+# Caddyfile - Reverse proxy for Saraswati Backend
 #
 # Replace {$DOMAIN} with your actual domain or use environment variable.
 # For DuckDNS: saraswati.duckdns.org

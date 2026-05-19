@@ -252,7 +252,7 @@ void DataPipeline::fetch_nitter() {
     }
 
     if (new_posts.empty()) {
-        std::cerr << "[Pipeline] X/Twitter: all instances failed — no posts collected\n";
+        std::cerr << "[Pipeline] X/Twitter: all instances failed, no posts collected\n";
     }
 
     {

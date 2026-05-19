@@ -138,7 +138,7 @@ function buildForceGraphData(graphData: GraphData, papers?: Paper[] | null) {
     return { nodes, links }
 }
 
-// ─── Timeline View ──────────────────────────────────
+// Timeline View
 function TimelineView({ papers, onPaperClick }: { papers: Paper[]; onPaperClick?: (paperId: string) => void }) {
     const sorted = useMemo(() =>
         [...papers].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20),
@@ -192,7 +192,7 @@ function EmptyState({ message }: { message?: string }) {
     )
 }
 
-// ─── Force Graph Canvas ─────────────────────────────
+// Force Graph Canvas
 function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
     graphData: GraphData
     papers?: Paper[] | null
@@ -218,7 +218,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
         return () => observer.disconnect()
     }, [])
 
-    // Build graph data with position persistence
+    // Rebuild force graph data, keeping positions for existing nodes
     const { fgData, adjacency } = useMemo(() => {
         const fresh = buildForceGraphData(graphData, papers)
         const prev = prevDataRef.current
@@ -230,7 +230,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
                     posMap.set(n.id, { x: n.x, y: n.y, fx: n.x, fy: n.y })
                 }
             }
-            // Pin existing nodes so the layout stays stable on data refresh
+            // Pin existing nodes so layout stays stable on refresh
             for (const node of fresh.nodes) {
                 const pos = posMap.get(node.id)
                 if (pos) {
@@ -254,7 +254,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
         return { fgData: fresh, adjacency: adj }
     }, [graphData, papers])
 
-    // Configure physics once on data load — then let it settle
+    // Set up physics, then let it settle
     useEffect(() => {
         const fg = fgRef.current
         if (!fg || fgData.nodes.length === 0) return
@@ -263,13 +263,13 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
         fg.d3Force('link')?.distance(90).strength(0.4)
         fg.d3Force('center')?.strength(0.03)
 
-        // Don't reheat if graph already settled and we're just refreshing data
+        // Skip reheat if already settled
         if (!settled) {
             fg.d3ReheatSimulation()
         }
     }, [fgData, settled])
 
-    // Initial zoom-to-fit and freeze after settling
+    // Zoom to fit on first load, then freeze
     useEffect(() => {
         if (initialZoomDone.current) return
         const timer = setTimeout(() => {
@@ -278,7 +278,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
                 initialZoomDone.current = true
                 setSettled(true)
 
-                // Unpin all nodes after settling so dragging works
+                // Unpin nodes so dragging works
                 for (const node of fgData.nodes) {
                     node.fx = undefined
                     node.fy = undefined
@@ -302,37 +302,37 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
 
         ctx.save()
 
-        // Dim unrelated nodes on hover
+        // Fade unrelated nodes
         if (hoveredNode && !linked) {
             ctx.globalAlpha = 0.12
         } else {
             ctx.globalAlpha = isConcept ? 1 : 0.85
         }
 
-        // Subtle shadow on hover
+        // Glow on hover
         if (isHovered) {
             ctx.shadowColor = node.color
             ctx.shadowBlur = 8
         }
 
-        // Draw node — concept nodes get a ring, paper nodes are solid circles
+        // Concepts get a ring, papers are solid
         ctx.beginPath()
         ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
 
         if (isConcept) {
-            // Concept nodes: solid fill + ring border for visual weight
+            // Concept: fill + ring
             ctx.fillStyle = `${node.color}88`
             ctx.fill()
             ctx.strokeStyle = node.color
             ctx.lineWidth = 1.8 / globalScale
             ctx.stroke()
         } else {
-            // Paper nodes: solid circles
+            // Paper: solid circle
             ctx.fillStyle = `${node.color}cc`
             ctx.fill()
         }
 
-        // Label logic: always show concepts, show papers on hover
+        // Show concept labels always, paper labels on hover
         const showLabel = isHovered || isConcept
         if (showLabel) {
             ctx.shadowBlur = 0
@@ -347,7 +347,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
             const textWidth = ctx.measureText(displayLabel).width
             const pad = fontSize * 0.3
 
-            // Label background pill
+            // Background pill
             const bgX = node.x - textWidth / 2 - pad * 2
             const bgY = node.y - r - fontSize - pad * 2
             const bgW = textWidth + pad * 4
@@ -444,7 +444,7 @@ function ForceGraphCanvas({ graphData, papers, onPaperClick, onConceptClick }: {
     )
 }
 
-// ─── Main Graph View ────────────────────────────────
+// Main Graph View
 type ViewMode = '3d' | 'timeline'
 
 export function GraphView({ graphData, papers, onPaperClick, onConceptClick }: GraphViewProps) {
