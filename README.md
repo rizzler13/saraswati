@@ -4,11 +4,11 @@ Realtime Research Radar. Monitors scientific knowledge flow, detects new papers,
 
 ## Features
 
- Paper Detection: Monitors ArXiv, BioRxiv, and HuggingFace for new research.
- Discourse Tracking: Follows scientific discussions on Reddit, Twitter/X, and Hacker News.
- Knowledge Graph: Stores relationships in Memgraph (papers, authors, concepts).
- 3D Visualization: Force-directed graph showing idea clusters.
- Memory Efficient: Designed to run efficiently on standard consumer hardware.
+- Paper Detection: Monitors ArXiv, BioRxiv, and HuggingFace for new research.
+- Discourse Tracking: Follows scientific discussions on Reddit, Twitter/X, and Hacker News.
+- Knowledge Graph: Stores relationships in Memgraph (papers, authors, concepts).
+- 3D Visualization: Force-directed graph showing idea clusters.
+- Memory Efficient: Designed to run efficiently on standard consumer hardware.
 
 ## Architecture
 
