@@ -117,7 +117,7 @@ export function DiscourseFeed({ onPaperClick }: DiscourseFeedProps) {
                                     {post.title || post.content?.slice(0, 60)}
                                 </span>
                                 <span className="discourse-row-meta">
-                                    {post.influencer && <span className="influencer-dot">⭐</span>}
+                                    {post.influencer && <span className="influencer-dot">*</span>}
                                     <span className="discourse-row-score">↑{post.score}</span>
                                     <span className="discourse-row-time">{timeAgo(post.created_at)}</span>
                                 </span>
