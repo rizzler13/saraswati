@@ -12,9 +12,9 @@ Realtime Research Radar. Monitors scientific knowledge flow, detects new papers,
 
 ## Architecture
 
-Frontend (React): PaperList, StatsPanel, 3D GraphView
-Backend (C++ / Drogon): Crawlers, Parsers, API, Enrichment
-Database (Memgraph): Knowledge graph storage via Docker
+- Frontend (React): PaperList, StatsPanel, 3D GraphView
+- Backend (C++ / Drogon): Crawlers, Parsers, API, Enrichment
+- Database (Memgraph): Knowledge graph storage via Docker
 
 ## Quick Start (Docker - Recommended)
 
