@@ -4,8 +4,8 @@ services:
     runtime: python
     python:
       version: "3.11.12"
-    # Install dependencies from requirements.txt + the local research package
-    buildCommand: "pip install -r requirements.txt && pip install -e ./research"
+    # Install dependencies from requirements.txt
+    buildCommand: "pip install -r requirements.txt"
     # Start command launches uvicorn on Render's assigned $PORT
     startCommand: "python -m uvicorn research.server:app --host 0.0.0.0 --port $PORT"
     envVars:

@@ -1,48 +1,20 @@
 services:
-  memgraph:
-    image: memgraph/memgraph-platform:latest
-    container_name: saraswati-memgraph
-    ports:
-      - "7687:7687" # Bolt protocol
-      - "7444:7444" # Memgraph Lab
-      - "3000:3000" # Memgraph Lab UI
-    volumes:
-      - memgraph_data:/var/lib/memgraph
-      - memgraph_log:/var/log/memgraph
-      - ./db:/db:ro # Schema files
-    environment:
-      - MEMGRAPH="--log-level=WARNING --memory-limit=1800"
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 512M
-    mem_limit: 2g
-    memswap_limit: 2g
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "echo", ">", "/dev/tcp/localhost/7687" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: saraswati-backend
     ports:
-      - "8080:8080"
-    depends_on:
-      memgraph:
-        condition: service_healthy
-    volumes:
-      - ./config:/etc/saraswati/config:ro
+      - "8081:8081"
     environment:
-      - HOST=0.0.0.0
-      - PORT=8080
+      - PORT=8081
+      - DATABASE_PATH=/app/data/saraswati.db
+      # Load keys from the host shell/env file
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
 
   frontend:
@@ -55,7 +27,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-
-volumes:
-  memgraph_data:
-  memgraph_log:
