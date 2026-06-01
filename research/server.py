@@ -62,7 +62,14 @@ logger = logging.getLogger("saraswati.server")
 
 # --- Config ---
 config = ResearchConfig.from_env()
-CACHE_DIR = Path(__file__).parent.parent / "data" / "cache"
+
+DB_PATH_ENV = os.getenv("DATABASE_PATH")
+if DB_PATH_ENV:
+    PERSISTENT_DATA_DIR = Path(DB_PATH_ENV).parent
+else:
+    PERSISTENT_DATA_DIR = Path(__file__).parent.parent / "data"
+
+CACHE_DIR = PERSISTENT_DATA_DIR / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Deep dive cache
@@ -124,6 +131,12 @@ async def startup():
     try:
         init_db()
         logger.info("SQLite database initialized successfully.")
+        
+        # Trigger background crawl on startup asynchronously
+        client = await get_client()
+        from .sources.papers import get_trending_papers
+        asyncio.create_task(get_trending_papers(client))
+        logger.info("Triggered initial background papers crawl.")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -164,16 +177,55 @@ async def papers_trending(page: int = 1, limit: int = 50, category: Optional[str
 
 @app.get("/api/papers/search")
 async def papers_search(q: str = ""):
-    """Search arXiv for papers matching a query."""
+    """Search for papers matching query (local DB first, then arXiv API fallback/merge)."""
     if not q.strip():
         return []
+    
+    from .core.db import search_local_papers
+    
+    logger.info(f"Performing search for query: '{q}'")
+    # 1. Search local SQLite DB first (instant, works offline/without blocks)
+    try:
+        local_results = search_local_papers(q.strip(), limit=30)
+        logger.info(f"Local database returned {len(local_results)} search results for '{q}'")
+    except Exception as e:
+        logger.error(f"Local database search failed: {e}")
+        local_results = []
+    
+    # 2. Query arXiv API as fallback with a 2.0s timeout
     client = await get_client()
     try:
-        papers = await search_arxiv(client, q.strip(), max_results=30)
-        return [p.to_dict() for p in papers]
+        arxiv_papers = await asyncio.wait_for(
+            search_arxiv(client, q.strip(), max_results=20),
+            timeout=2.0
+        )
+        arxiv_dicts = [p.to_dict() for p in arxiv_papers]
+        logger.info(f"arXiv search returned {len(arxiv_dicts)} results for '{q}'")
+    except asyncio.TimeoutError:
+        logger.warning(f"arXiv search fallback timed out for '{q}'")
+        arxiv_dicts = []
     except Exception as e:
-        logger.error(f"Paper search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"arXiv search fallback failed for '{q}': {e}")
+        arxiv_dicts = []
+        
+    # 3. Merge and deduplicate
+    seen_ids = set()
+    merged = []
+    
+    for p in local_results:
+        p_id = p.get("id")
+        if p_id and p_id not in seen_ids:
+            seen_ids.add(p_id)
+            merged.append(p)
+            
+    for p in arxiv_dicts:
+        p_id = p.get("id")
+        if p_id and p_id not in seen_ids:
+            seen_ids.add(p_id)
+            merged.append(p)
+            
+    logger.info(f"Merged search results for '{q}': {len(merged)} total papers")
+    return merged
 
 
 @app.get("/api/papers/daily")
@@ -197,13 +249,13 @@ async def generate_thumbnail_task(paper_id: str, thumb_path: Path):
         return
 
     logger.info(f"Asynchronously downloading PDF and generating thumbnail for {paper_id}...")
-    pdf_url = f"https://arxiv.org/pdf/{paper_id}"
+    pdf_url = f"https://export.arxiv.org/pdf/{paper_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(pdf_url, headers=headers)
             if resp.status_code == 200:
                 # Render CPU-bound thumbnail in separate thread to keep event loop free
@@ -240,8 +292,10 @@ async def papers_thumbnail(paper_id: str, background_tasks: BackgroundTasks):
     # Queue background generation task
     background_tasks.add_task(generate_thumbnail_task, paper_id, thumb_path)
 
-    # Immediately raise 404 to let frontend fall back to CSS placeholder instantly
-    raise HTTPException(status_code=404, detail="Thumbnail generating in background")
+    # Immediately return 404 to let frontend fall back to CSS placeholder instantly
+    # Using JSONResponse ensures FastAPI runs the queued background tasks
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=404, content={"detail": "Thumbnail generating in background"})
 
 
 # ===================================================================

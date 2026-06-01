@@ -617,12 +617,17 @@ async def get_trending_papers(client: httpx.AsyncClient) -> list[Paper]:
     db_results = query_trending_papers(page=1, limit=200)
 
     if not db_results:
-        logger.info("Database is empty on query. Starting synchronous refresh...")
-        # Force a synchronous refresh to fill the DB
-        await _refresh_papers_now(client)
-        db_results = query_trending_papers(page=1, limit=200)
+        logger.info("Database is empty on query. Starting background refresh...")
+        # Trigger async refresh in background to prevent HTTP lockup/timeout
+        _trigger_background_refresh(client)
+        
+        # Load local disk cache if present as instant fallback, otherwise return empty list
+        fallback = load_cached_papers()
+        if fallback:
+            return fallback
+        return []
     else:
-        # DB has papers, trigger background refresh
+        # DB has papers, trigger background refresh if needed
         _trigger_background_refresh(client)
 
     # Convert SQLite dict rows back to Paper instances

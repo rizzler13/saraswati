@@ -105,13 +105,13 @@ async def _download_and_parse_pdf(
 ) -> tuple[str, list[dict]]:
     """Download PDF and extract both text and figures.
     Returns (full_text, figures_list)."""
-    pdf_url = f"https://arxiv.org/pdf/{paper_id}"
+    pdf_url = f"https://export.arxiv.org/pdf/{paper_id}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
-        resp = await client.get(pdf_url, headers=headers, timeout=45.0, follow_redirects=True)
+        resp = await client.get(pdf_url, headers=headers, timeout=15.0, follow_redirects=True)
         if resp.status_code != 200:
             logger.warning(f"PDF download failed: {resp.status_code}")
             return "", []

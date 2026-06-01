@@ -161,3 +161,38 @@ def query_trending_papers(page: int = 1, limit: int = 50, category: Optional[str
         results.append(d)
 
     return results
+
+def search_local_papers(query: str, limit: int = 50) -> list[dict]:
+    """Search local SQLite database for papers matching query in title or abstract."""
+    if not query.strip():
+        return []
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Simple case-insensitive search on title and abstract
+    sql = """
+    SELECT * FROM papers 
+    WHERE title LIKE ? OR abstract LIKE ? 
+    ORDER BY score DESC, date DESC 
+    LIMIT ?
+    """
+    like_query = f"%{query.strip()}%"
+    cursor.execute(sql, (like_query, like_query, limit))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    results = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["authors"] = json.loads(d["authors"])
+        except Exception:
+            d["authors"] = []
+        try:
+            d["tags"] = json.loads(d["tags"])
+        except Exception:
+            d["tags"] = []
+        results.append(d)
+        
+    return results
