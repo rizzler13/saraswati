@@ -464,3 +464,12 @@ async def health():
         "openrouter_configured": or_ok,
         "deep_dive_cache_count": len(dd_cache.list_available()),
     }
+
+@app.get("/")
+async def root():
+    """Welcome root endpoint."""
+    return {
+        "message": "Welcome to Saraswati Research Engine API. Visit /health for status or /docs for documentation.",
+        "version": "0.2.0",
+        "status": "online"
+    }
