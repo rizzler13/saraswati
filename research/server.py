@@ -511,12 +511,27 @@ async def health():
     """Health check."""
     groq_ok = bool(os.getenv("GROQ_API_KEY"))
     or_ok = bool(os.getenv("OPENROUTER_API_KEY"))
+    
+    db_count = 0
+    try:
+        from .core.db import get_connection
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT count(*) FROM papers")
+        row = cursor.fetchone()
+        db_count = row[0] if row else 0
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Health check failed to query database: {e}")
+        db_count = -1
+
     return {
         "status": "healthy",
         "version": "0.2.0",
         "groq_configured": groq_ok,
         "openrouter_configured": or_ok,
         "deep_dive_cache_count": len(dd_cache.list_available()),
+        "database_paper_count": db_count,
     }
 
 @app.get("/")
