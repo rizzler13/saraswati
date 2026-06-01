@@ -1,7 +1,9 @@
 #include "controllers/Controllers.hpp"
 #include "pipeline/DataPipeline.hpp"
+#include "net/AsyncHttpClient.hpp"
 #include <drogon/drogon.h>
 #include <nlohmann/json.hpp>
+#include <cstdlib>
 
 #ifdef __APPLE__
 #include <mach/mach.h>
@@ -12,6 +14,7 @@
 extern std::atomic<bool> g_crawler_paused;
 extern std::atomic<size_t> g_papers_count;
 extern std::atomic<size_t> g_mentions_count;
+extern std::unique_ptr<saraswati::net::AsyncHttpClient> g_http;
 
 namespace saraswati::controllers {
 
@@ -19,8 +22,9 @@ using json = nlohmann::json;
 using namespace drogon;
 
 // Serialize to string and return as a JSON content-type response.
-static HttpResponsePtr makeJsonResponse(const json& j) {
+static HttpResponsePtr makeJsonResponse(const json& j, HttpStatusCode status = k200OK) {
     auto resp = HttpResponse::newHttpResponse();
+    resp->setStatusCode(status);
     resp->setContentTypeCode(CT_APPLICATION_JSON);
     resp->setBody(j.dump());
     resp->addHeader("Access-Control-Allow-Origin", "*");
@@ -180,6 +184,76 @@ void HealthController::statsDetail(const HttpRequestPtr& req, std::function<void
     auto& pipeline = pipeline::DataPipeline::instance();
     auto response = pipeline.get_stats_detail(type);
     callback(makeJsonResponse(response));
+}
+
+void ResearchController::chat(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    // Read API key from environment
+    const char* api_key_env = std::getenv("GROQ_API_KEY");
+    if (!api_key_env || std::string(api_key_env).empty()) {
+        json err = {{"error", "GROQ_API_KEY environment variable not set. "
+                     "Export it before starting: export GROQ_API_KEY=gsk_..."}};
+        callback(makeJsonResponse(err, k500InternalServerError));
+        return;
+    }
+    std::string api_key(api_key_env);
+
+    // Parse request body
+    std::string body(req->body());
+    json request;
+    try {
+        request = json::parse(body);
+    } catch (const std::exception& e) {
+        json err = {{"error", std::string("Invalid JSON: ") + e.what()}};
+        callback(makeJsonResponse(err, k400BadRequest));
+        return;
+    }
+
+    if (!request.contains("messages") || !request["messages"].is_array()) {
+        json err = {{"error", "Request must contain a 'messages' array"}};
+        callback(makeJsonResponse(err, k400BadRequest));
+        return;
+    }
+
+    // Build Groq API request
+    json groq_body = {
+        {"model", "llama-3.1-8b-instant"},
+        {"messages", request["messages"]},
+        {"temperature", 0.4},
+        {"max_tokens", 2048}
+    };
+
+    std::unordered_map<std::string, std::string> headers = {
+        {"Authorization", "Bearer " + api_key},
+        {"Content-Type", "application/json"}
+    };
+
+    // Synchronous call to Groq — runs on a Drogon worker thread
+    auto groq_resp = g_http->post_sync(
+        "https://api.groq.com/openai/v1/chat/completions",
+        groq_body.dump(),
+        headers
+    );
+
+    if (!groq_resp.success) {
+        json err = {{"error", "Groq API request failed: " + groq_resp.error_message}};
+        callback(makeJsonResponse(err, k502BadGateway));
+        return;
+    }
+
+    // Parse Groq response and extract content
+    try {
+        auto data = json::parse(groq_resp.body);
+        std::string content;
+        if (data.contains("choices") && data["choices"].is_array()
+            && !data["choices"].empty()) {
+            content = data["choices"][0]["message"]["content"].get<std::string>();
+        }
+        json result = {{"content", content.empty() ? "No response received." : content}};
+        callback(makeJsonResponse(result));
+    } catch (const std::exception& e) {
+        json err = {{"error", std::string("Failed to parse Groq response: ") + e.what()}};
+        callback(makeJsonResponse(err, k502BadGateway));
+    }
 }
 
 }

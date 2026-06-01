@@ -64,4 +64,14 @@ public:
                      std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 };
 
+class ResearchController : public drogon::HttpController<ResearchController> {
+public:
+    METHOD_LIST_BEGIN
+    ADD_METHOD_TO(ResearchController::chat, "/api/research", drogon::Post);
+    METHOD_LIST_END
+
+    void chat(const drogon::HttpRequestPtr& req,
+              std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+};
+
 }

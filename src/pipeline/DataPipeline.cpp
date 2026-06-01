@@ -53,13 +53,21 @@ void DataPipeline::poll_loop() {
 }
 
 void DataPipeline::fetch_now() {
-    std::cout << "[Pipeline] Fetching from all sources...\n";
+    std::cout << "[Pipeline] Fetching from all sources (parallel)...\n";
 
-    fetch_arxiv();
-    fetch_huggingface();
-    fetch_reddit();
-    fetch_nitter();
-    fetch_hackernews();
+    // Run all source fetchers in parallel — each writes to its own
+    // source-tagged slice of papers_/discourse_ under independent locks,
+    // so this is safe.
+    std::vector<std::thread> fetchers;
+    fetchers.emplace_back([this]() { fetch_arxiv(); });
+    fetchers.emplace_back([this]() { fetch_huggingface(); });
+    fetchers.emplace_back([this]() { fetch_reddit(); });
+    fetchers.emplace_back([this]() { fetch_nitter(); });
+    fetchers.emplace_back([this]() { fetch_hackernews(); });
+
+    for (auto& t : fetchers) t.join();
+
+    // These depend on aggregated data from all fetchers, so run after
     extract_topics();
     rebuild_graph_cache();
 

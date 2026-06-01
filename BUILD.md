@@ -1,166 +1,117 @@
-# Build & Run: Project Saraswati
+# Building & Running Project Saraswati Locally
 
-## Prerequisites (macOS M1)
+Saraswati is designed with a lightweight Python backend running FastAPI and a React/Vite frontend. It uses SQLite for storing crawled papers locally.
 
-### 1. Install Homebrew Dependencies
+---
 
-```bash
-# Core build tools
-brew install cmake ninja
+## Prerequisites
 
-# Required libraries
-brew install curl openssl@3 nlohmann-json
+- **Python**: `>= 3.11`
+- **Node.js**: `>= v18` & **npm**
 
-# Gumbo HTML parser
-brew install gumbo-parser
+---
 
-# Drogon web framework
-brew install drogon
+## 1. Environment Setup
+
+Copy your API keys into a `.env` file at the root of the project:
+
+```env
+GROQ_API_KEY=gsk_NhYG...
+OPENROUTER_API_KEY=sk-or-...
+CEREBRAS_API_KEY=csk-...
 ```
 
-### 2. Install mgclient (Memgraph C Client)
+---
 
+## 2. Backend Setup & Run
+
+The backend is housed in the `research/` directory.
+
+### Step 1: Virtual Environment
 ```bash
-git clone https://github.com/memgraph/mgclient.git
-cd mgclient
-mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/opt/homebrew
-make -j$(sysctl -n hw.ncpu)
-sudo make install
+cd research
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-### 3. Install Frontend Dependencies
-
+### Step 2: Install Dependencies
+Install all required libraries for LiteLLM, LangGraph, and PDF parsing:
 ```bash
-cd frontend
+pip install fastapi "uvicorn[standard]" litellm langgraph langchain-core pymupdf httpx pydantic python-dotenv
+```
+
+### Step 3: Run the FastAPI Server
+**Crucial**: The server must be executed from the project root directory so that it can resolve internal package paths (`from .core import ...`):
+```bash
+cd ..
+python -m uvicorn research.server:app --host 0.0.0.0 --port 8081
+```
+
+Once running, you can access:
+- **API Documentation (Swagger UI)**: [http://localhost:8081/docs](http://localhost:8081/docs)
+- **Health Check**: `curl http://localhost:8081/health`
+
+---
+
+## 3. Frontend Setup & Run
+
+The frontend is housed in the `ui/` directory.
+
+### Step 1: Install Node Dependencies
+```bash
+cd ui
 npm install
 ```
 
----
-
-## Quick Start (3 steps)
-
+### Step 2: Launch Vite Dev Server
 ```bash
-# 1. Database
-docker compose up -d
-
-# 2. Backend  (port 8080)
-cd build && ninja && ./saraswati --config ../config/config.example.json
-
-# 3. Frontend (port 5173, in a new terminal)
-cd frontend && npm run dev
-```
-
-
-
----
-
-## Full Commands
-
-### Build Backend
-
-```bash
-mkdir -p build && cd build
-cmake .. -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3
-ninja
-```
-
-### Start Memgraph
-
-```bash
-docker compose up -d
-
-# Verify
-docker ps --filter name=saraswati
-
-# Initialize schema (first time only)
-cat db/schema.cypher | docker exec -i saraswati-db mgconsole
-```
-
-### Run Backend
-
-```bash
-cd build
-./saraswati --config ../config/config.example.json
-```
-
-### Run Frontend
-
-```bash
-cd frontend
 npm run dev
 ```
 
-### Stop Everything
+Open [http://localhost:5173](http://localhost:5173) in your browser. All requests to `/api` will be automatically proxied by Vite to the Python server at `http://localhost:8081`.
 
+---
+
+## 4. SQLite Database Details
+
+Saraswati automatically initializes and handles its local SQLite database file on startup at:
+`data/saraswati.db`
+
+### Schema Structure
+- **Table**: `papers`
+- **Indexes**:
+  - `idx_papers_score` (Descending on `score`)
+  - `idx_papers_category` (On `category`)
+  - `idx_papers_date` (Descending on published `date`)
+
+### Inspected/Query Stats
+You can query the database directly using SQLite commands:
 ```bash
-pkill -f './saraswati'      # backend
-pkill -f 'vite'             # frontend
-docker compose down         # database
+# Count total papers stored
+sqlite3 data/saraswati.db "SELECT count(*) FROM papers;"
+
+# List categories and counts
+sqlite3 data/saraswati.db "SELECT category, count(*) FROM papers GROUP BY category;"
 ```
 
 ---
 
-## Agent Workflows
+## 5. Troubleshooting & FAQ
 
-If you're using the Gemini agent, these slash commands are available:
+### ModuleNotFoundError: No module named 'research'
+Make sure you are executing the `uvicorn` command from the **project root directory** (e.g. `saraswati/`) and running it as a module (`python -m uvicorn research.server:app`) rather than launching it inside the `research/` directory.
 
-| Command | What it does |
-|---|---|
-| `/start` | Start full stack (DB → Backend → Frontend) |
-| `/build` | Build C++ backend with CMake + Ninja |
-| `/rebuild` | Rebuild + restart backend |
-| `/stop` | Stop all services |
-
----
-
-## Debug Build
-
+### Port Conflicts (8081 or 5173 already in use)
+If you get address already in use errors, check what processes are running on those ports:
 ```bash
-cd build
-cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Debug
-ninja
+lsof -i :8081
+lsof -i :5173
 ```
+Kill those processes or adjust the port configurations in `research/server.py` and `ui/vite.config.ts`.
 
----
-
-## Memory Verification
-
-```bash
-# Watch Memgraph memory
-docker stats saraswati-db --no-stream
-
-# Expected limits:
-# - Memgraph container: < 2GB
-# - saraswati process:  < 500MB
-# - Total system:       < 4GB (leaving 4GB for OS)
-```
-
----
-
-## Troubleshooting
-
-### mgclient not found
-```bash
-ls /opt/homebrew/lib/libmgclient*
-cmake .. -DMGCLIENT_LIBRARY=/opt/homebrew/lib/libmgclient.dylib \
-         -DMGCLIENT_INCLUDE_DIR=/opt/homebrew/include
-```
-
-### Drogon not found
-```bash
-export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-```
-
-### OpenSSL version conflict
-```bash
-cmake .. -DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3
-```
-
-### Port already in use
-```bash
-lsof -i :8080    # find what's on the backend port
-lsof -i :5173    # find what's on the frontend port
+### GitHub API Rate Limits
+If you get warnings about `GitHub API rate limit hit` in the server logs, it means the public API limit has been reached. 
+You can increase the limit by setting a `GITHUB_TOKEN` in your `.env` file.
+```env
+GITHUB_TOKEN=ghp_...
 ```

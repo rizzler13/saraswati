@@ -71,3 +71,22 @@ coverage/
 # Temporary
 tmp/
 temp/
+
+# Python virtual environment & cache
+.venv/
+*/.venv/
+__pycache__/
+*/__pycache__/
+*.pyc
+
+# Local runtime database & caches
+data/saraswati.db
+data/cache/
+data/thumbnails/
+data/*.log
+data/*.json
+*.db
+
+# Firebase local files
+.firebase/
+

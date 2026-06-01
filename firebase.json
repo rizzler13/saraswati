@@ -1,0 +1,14 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Saraswati",
+        "supportEmail": "chinmayikr0252@gmail.com",
+        "authorizedRedirectUris": [
+          "https://saraswati-593cc.firebaseapp.com/__/auth/handler"
+        ]
+      }
+    }
+  }
+}

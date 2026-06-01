@@ -27,35 +27,6 @@ const TITLES: Record<string, string> = {
   topics: 'Topic Distribution',
 }
 
-function BarChart({
-  items,
-  maxCount,
-}: {
-  items: BreakdownItem[]
-  maxCount: number
-}) {
-  return (
-    <div className="stat-detail-bars">
-      {items.map(item => (
-        <div key={item.name} className="stat-detail-bar-row">
-          <div className="stat-detail-bar-label">
-            <span>{item.name}</span>
-            <span className="stat-detail-bar-count">{item.count}</span>
-          </div>
-          <div className="stat-detail-bar-track">
-            <div
-              className="stat-detail-bar-fill"
-              style={{
-                width: `${maxCount > 0 ? (item.count / maxCount) * 100 : 0}%`,
-              }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function StatDetailModal({ type, onClose }: StatDetailModalProps) {
   const [data, setData] = useState<StatDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,9 +52,7 @@ export function StatDetailModal({ type, onClose }: StatDetailModalProps) {
 
   const getItems = (): BreakdownItem[] => {
     if (!data) return []
-    if (type === 'papers') {
-      return [...(data.by_source || []), ...(data.by_category || [])]
-    }
+    if (type === 'papers') return [...(data.by_source || []), ...(data.by_category || [])]
     if (type === 'mentions') return data.by_platform || []
     if (type === 'topics') return data.topics || []
     return []
@@ -94,45 +63,41 @@ export function StatDetailModal({ type, onClose }: StatDetailModalProps) {
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal-panel">
-        <button className="modal-close" onClick={onClose}>×</button>
+      <div className="modal-panel" id="stat-detail-modal">
+        <button className="modal-close" onClick={onClose}>&times;</button>
 
         <div className="modal-score">
-          <span className="modal-score-value">
-            {data?.total?.toLocaleString() ?? '-'}
-          </span>
-          <span className="modal-score-label">Total {type}</span>
+          {data?.total?.toLocaleString() ?? '--'} total
         </div>
 
         <h2 className="modal-title">{TITLES[type] || type}</h2>
 
         {loading ? (
-          <div className="loading">
+          <div className="empty-state">
             <div className="loading-spinner" />
+            Loading...
           </div>
         ) : (
-          <div className="modal-section">
-            <h3 className="modal-section-title">
-              {type === 'papers'
-                ? 'By Source'
-                : type === 'mentions'
-                  ? 'By Platform'
-                  : 'Topics'}
-            </h3>
-            <BarChart items={items} maxCount={maxCount} />
-
-            {type === 'mentions' && data?.with_paper_links !== undefined && (
-              <div className="stat-detail-note">
-                {data.with_paper_links} mentions link to ArXiv papers
+          <div className="stat-bars">
+            {items.map(item => (
+              <div key={item.name} className="stat-bar-row">
+                <div className="stat-bar-label">
+                  <span>{item.name}</span>
+                  <span className="stat-bar-count">{item.count}</span>
+                </div>
+                <div className="stat-bar-track">
+                  <div
+                    className="stat-bar-fill"
+                    style={{ width: `${maxCount > 0 ? (item.count / maxCount) * 100 : 0}%` }}
+                  />
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
 
         <div className="modal-actions">
-          <button className="modal-btn secondary" onClick={onClose}>
-            Close
-          </button>
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

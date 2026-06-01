@@ -1,141 +1,169 @@
 import { useState } from 'react'
-import { HudLayout } from './components/HudLayout'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { AuthProvider } from './components/auth/AuthContext'
+import { HudLayout, type TabView } from './components/HudLayout'
 import { PaperList } from './components/PaperList'
 import { StatsPanel } from './components/StatsPanel'
 import { GraphView, type GraphData } from './components/GraphView'
 import { PaperDetailModal } from './components/PaperDetailModal'
-import { StatDetailModal } from './components/StatDetailModal'
-import { DiscourseFeed } from './components/DiscourseFeed'
 import { ResearchPanel } from './components/ResearchPanel'
+import { ResearchTab } from './components/ResearchTab'
+import { ProfilePage } from './components/ProfilePage'
+import { AgentChat } from './components/AgentChat'
 import { usePolling } from './hooks/usePolling'
 
 export interface Paper {
   id: string
   title: string
   abstract: string
-  authors?: string[]
+  authors: string[]
   date: string
+  source: string
+  url: string
   score: number
-  source?: string
   category?: string
-  url?: string
+  tags?: string[]
+  hf_upvotes?: number
+  pdf_url?: string
+  code_url?: string
+  github_stars?: number
+  github_forks?: number
+  github_velocity?: number
 }
 
-interface Stats {
-  papers_total: number
-  mentions_total: number
-  papers_today: number
-  trending_topics: string[]
-}
-
-interface CrawlerStatus {
-  paused: boolean
-  papers_ingested: number
-  memory_usage_mb: number
-}
-
-export default function App() {
-  const { data: papers, isLoading: papersLoading } = usePolling<Paper[]>(
-    '/api/papers/trending',
-    8000
-  )
-  const { data: stats } = usePolling<Stats>('/api/stats', 15000)
-  const { data: crawlerStatus } = usePolling<CrawlerStatus>(
-    '/api/crawler/status',
-    5000
-  )
-  const { data: graphData } = usePolling<GraphData>('/api/graph', 10000)
-
+function App() {
+  const [activeTab, setActiveTab] = useState<TabView>('trending')
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null)
   const [researchPaper, setResearchPaper] = useState<Paper | null>(null)
-  const [statDetailType, setStatDetailType] = useState<
-    'papers' | 'mentions' | 'topics' | null
-  >(null)
+  const [deepResearchPaper, setDeepResearchPaper] = useState<Paper | null>(null)
 
-  const handlePaperById = (paperId: string) => {
-    const paper = papers?.find(p => p.id === paperId)
-    if (paper) setSelectedPaper(paper)
-  }
+  const { data: papers } = usePolling<Paper[]>('/api/papers/trending', 30000)
+  const { data: stats } = usePolling<any>('/api/stats', 30000)
+  const { data: graphData } = usePolling<GraphData>('/api/graph', 60000)
 
-  const handleDiscoursePaperClick = (arxivId: string) => {
-    const paper = papers?.find(p => p.id === arxivId)
-    if (paper) setSelectedPaper(paper)
-  }
 
+
+  const handlePaperClick = (paper: Paper) => setSelectedPaper(paper)
   const handleResearch = (paper: Paper) => {
     setSelectedPaper(null)
     setResearchPaper(paper)
   }
+  const handleDeepResearch = (paper: Paper) => {
+    setSelectedPaper(null)
+    setResearchPaper(null)
+    setDeepResearchPaper(paper)
+    setActiveTab('research')
+  }
 
   return (
-    <HudLayout
-      crawlerStatus={crawlerStatus}
-      header={
-        <div className="status-bar">
-          <div className="status-item">
-            <span className={
-              `status-dot ${crawlerStatus?.paused ? 'warning' : 'online'}`
-            } />
-            <span>
-              Crawler: {crawlerStatus?.paused ? 'Paused' : 'Active'}
-            </span>
+    <ErrorBoundary>
+    <AuthProvider>
+      <HudLayout
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab)
+          if (tab !== 'research') setDeepResearchPaper(null)
+        }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      >
+        {/* Trending tab */}
+        {activeTab === 'trending' && (
+          <div className="page-layout">
+            <StatsPanel
+              papers={papers || []}
+              activeDomain={searchQuery}
+              stats={stats}
+              onDomainClick={(domain: string) => setSearchQuery(domain)}
+            />
+            <main className="page-main">
+              <PaperList
+                onPaperClick={handlePaperClick}
+                searchQuery={searchQuery}
+              />
+            </main>
           </div>
-          <div className="status-item">
-            <span className="status-dot online" />
-            <span>Memgraph</span>
-          </div>
-          <div className="status-item">
-            <span>RSS: {crawlerStatus?.memory_usage_mb || 0} MB</span>
-          </div>
-        </div>
-      }
-      leftSidebar={
-        <>
-          <StatsPanel
-            stats={stats}
-            onStatClick={type => setStatDetailType(type as any)}
+        )}
+
+        {/* Methods tab */}
+        {activeTab === 'methods' && (
+          <GraphView
+            graphData={graphData}
+            onConceptClick={(label: string) => {
+              setSearchQuery(label)
+              setActiveTab('trending')
+            }}
           />
-          <PaperList
-            papers={papers || []}
-            isLoading={papersLoading}
-            onPaperClick={setSelectedPaper}
-            selectedPaperId={selectedPaper?.id ?? null}
+        )}
+
+        {/* Research tab */}
+        {activeTab === 'research' && (
+          <ResearchTab
+            initialPaper={deepResearchPaper}
+            onPaperClick={handlePaperClick}
           />
-        </>
-      }
-      rightSidebar={
-        <DiscourseFeed onPaperClick={handleDiscoursePaperClick} />
-      }
-    >
-      <GraphView
-        graphData={graphData}
-        papers={papers}
-        onPaperClick={handlePaperById}
-        onConceptClick={() => {}}
-      />
+        )}
 
-      {selectedPaper && (
-        <PaperDetailModal
-          paper={selectedPaper}
-          onClose={() => setSelectedPaper(null)}
-          onResearch={handleResearch}
-        />
-      )}
+        {/* Agent tab */}
+        {activeTab === 'agent' && (
+          <AgentChat />
+        )}
 
-      {statDetailType && (
-        <StatDetailModal
-          type={statDetailType}
-          onClose={() => setStatDetailType(null)}
-        />
-      )}
+        {/* Profile tab */}
+        {activeTab === 'profile' && (
+          <ProfilePage
+            onOpenChat={(paper) => {
+              const fullPaper: Paper = {
+                id: paper.id,
+                title: paper.title,
+                abstract: '',
+                authors: [],
+                date: '',
+                source: 'arxiv',
+                url: `https://arxiv.org/abs/${paper.id}`,
+                score: 0
+              }
+              handleResearch(fullPaper)
+            }}
+            onOpenDeepDive={(paper) => {
+              const fullPaper: Paper = {
+                id: paper.id,
+                title: paper.title,
+                abstract: '',
+                authors: [],
+                date: '',
+                source: 'arxiv',
+                url: `https://arxiv.org/abs/${paper.id}`,
+                score: 0
+              }
+              handleDeepResearch(fullPaper)
+            }}
+          />
+        )}
 
-      {researchPaper && (
-        <ResearchPanel
-          paper={researchPaper}
-          allPapers={papers || []}
-          onClose={() => setResearchPaper(null)}
-        />
-      )}
-    </HudLayout>
+        {/* Paper detail modal */}
+        {selectedPaper && (
+          <PaperDetailModal
+            paper={selectedPaper}
+            onClose={() => setSelectedPaper(null)}
+            onResearch={handleResearch}
+            onDeepResearch={handleDeepResearch}
+          />
+        )}
+
+        {/* Research chat panel */}
+        {researchPaper && (
+          <ResearchPanel
+            paper={researchPaper}
+            allPapers={papers || []}
+            onClose={() => setResearchPaper(null)}
+          />
+        )}
+      </HudLayout>
+    </AuthProvider>
+    </ErrorBoundary>
   )
 }
+
+export default App

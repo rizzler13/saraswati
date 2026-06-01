@@ -127,6 +127,13 @@ bool init_http(const Config& cfg) {
         return false;
     }
     
+    // Reduce rate limits for APIs that allow faster polling.
+    // Default is 2000ms which makes sequential ArXiv (8 categories) take ~16s.
+    g_http->set_domain_rate_limit("export.arxiv.org", 500);
+    g_http->set_domain_rate_limit("huggingface.co", 500);
+    g_http->set_domain_rate_limit("hn.algolia.com", 300);
+    g_http->set_domain_rate_limit("api.groq.com", 200);
+    
     std::cout << "[HTTP] Client started with " << cfg.crawler_threads << " threads\n";
     return true;
 }

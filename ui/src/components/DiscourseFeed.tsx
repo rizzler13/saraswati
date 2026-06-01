@@ -1,131 +1,96 @@
 import { useState, useMemo } from 'react'
-import { usePolling } from '../hooks/usePolling'
 
-interface DiscoursePost {
-    id: string
-    platform: string
-    author: string
-    title: string
-    content: string
-    url: string
-    arxiv_id: string
-    score: number
-    comments: number
-    subreddit: string
-    influencer: boolean
-    created_at: string
+interface Mention {
+  title: string
+  url: string
+  platform: string
+  score: number
+  date: string
+  paper_id?: string
 }
 
 interface DiscourseFeedProps {
-    onPaperClick?: (arxivId: string) => void
+  mentions?: Mention[] | null
 }
 
-const PLATFORMS = [
-    { key: 'all', label: 'All', icon: '◉' },
-    { key: 'reddit', label: 'Reddit', icon: '⟐' },
-    { key: 'twitter', label: 'X', icon: '𝕏' },
-    { key: 'hackernews', label: 'HN', icon: '▲' },
-] as const
-
-type PlatformFilter = typeof PLATFORMS[number]['key']
-
 const PLATFORM_COLORS: Record<string, string> = {
-    reddit: '#b87040',
-    twitter: '#5a8aaa',
-    hackernews: '#b0754a',
+  reddit: '#8b7355',
+  hackernews: '#a0522d',
+  twitter: '#5a7a7a',
+  default: '#999',
 }
 
 function timeAgo(dateStr: string): string {
-    if (!dateStr) return ''
-    const now = Date.now()
-    const then = new Date(dateStr).getTime()
-    const diff = Math.max(0, now - then)
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h`
-    return `${Math.floor(hrs / 24)}d`
+  try {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    if (hours < 1) return 'now'
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+  } catch {
+    return ''
+  }
 }
 
-export function DiscourseFeed({ onPaperClick }: DiscourseFeedProps) {
-    const { data: posts } = usePolling<DiscoursePost[]>('/api/discourse', 15000)
-    const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
+export function DiscourseFeed({ mentions }: DiscourseFeedProps) {
+  const [platform, setPlatform] = useState<string>('all')
 
-    const filtered = useMemo(() => {
-        if (!posts) return []
-        const f = platformFilter === 'all'
-            ? posts
-            : posts.filter(p => p.platform === platformFilter)
-        return f.slice(0, 15)
-    }, [posts, platformFilter])
+  const platforms = useMemo(() => {
+    if (!mentions) return []
+    const set = new Set<string>()
+    mentions.forEach(m => set.add(m.platform))
+    return Array.from(set)
+  }, [mentions])
 
-    return (
-        <div className="card discourse-card">
-            <div className="card-header">
-                <span className="card-title">Live Feed</span>
-                <span className="stat-live-dot" title="Live" />
-            </div>
+  const filtered = useMemo(() => {
+    if (!mentions) return []
+    let list = platform === 'all' ? mentions : mentions.filter(m => m.platform === platform)
+    return list
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 15)
+  }, [mentions, platform])
 
-            {/* Platform tabs */}
-            <div className="discourse-tabs">
-                {PLATFORMS.map(p => (
-                    <button
-                        key={p.key}
-                        className={`discourse-tab ${platformFilter === p.key ? 'active' : ''}`}
-                        onClick={() => setPlatformFilter(p.key)}
-                        style={platformFilter === p.key && p.key !== 'all'
-                            ? { borderColor: PLATFORM_COLORS[p.key], color: PLATFORM_COLORS[p.key] }
-                            : undefined
-                        }
-                    >
-                        <span className="discourse-tab-icon">{p.icon}</span>
-                        {p.label}
-                    </button>
-                ))}
-            </div>
+  if (!mentions || mentions.length === 0) return null
 
-            {/* Compact post list */}
-            <div className="discourse-scroll">
-                {filtered.length === 0 ? (
-                    <div className="discourse-empty">
-                        {!posts ? 'Loading…'
-                            : platformFilter === 'twitter'
-                                ? <><span style={{ fontSize: 16, display: 'block', marginBottom: 6 }}>𝕏</span>Nitter mirrors may be unavailable.<br />X/Twitter posts will appear when a working instance is found.</>
-                                : platformFilter === 'all'
-                                    ? 'Waiting for discourse data…'
-                                    : `No ${platformFilter} posts yet`
-                        }
-                    </div>
-                ) : (
-                    filtered.map((post, i) => {
-                        const pColor = PLATFORM_COLORS[post.platform] || '#888'
-                        return (
-                            <div
-                                key={post.id}
-                                className="discourse-row"
-                                onClick={() => {
-                                    if (post.arxiv_id && onPaperClick) {
-                                        onPaperClick(post.arxiv_id)
-                                    } else if (post.url) {
-                                        window.open(post.url, '_blank')
-                                    }
-                                }}
-                                style={{ animationDelay: `${i * 30}ms` }}
-                            >
-                                <span className="discourse-platform-dot" style={{ background: pColor }} />
-                                <span className="discourse-row-title">
-                                    {post.title || post.content?.slice(0, 60)}
-                                </span>
-                                <span className="discourse-row-meta">
-                                    {post.influencer && <span className="influencer-dot">*</span>}
-                                    <span className="discourse-row-score">↑{post.score}</span>
-                                    <span className="discourse-row-time">{timeAgo(post.created_at)}</span>
-                                </span>
-                            </div>
-                        )
-                    })
-                )}
-            </div>
-        </div>
-    )
+  return (
+    <div className="discourse-section">
+      <div className="discourse-tabs">
+        <button
+          className={`discourse-tab ${platform === 'all' ? 'active' : ''}`}
+          onClick={() => setPlatform('all')}
+        >
+          All
+        </button>
+        {platforms.map(p => (
+          <button
+            key={p}
+            className={`discourse-tab ${platform === p ? 'active' : ''}`}
+            onClick={() => setPlatform(p)}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {filtered.map((m, i) => (
+        <a
+          key={i}
+          href={m.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="discourse-row"
+          style={{ textDecoration: 'none' }}
+        >
+          <span
+            className="discourse-dot"
+            style={{ background: PLATFORM_COLORS[m.platform] || PLATFORM_COLORS.default }}
+          />
+          <span className="discourse-row-title">{m.title}</span>
+          <span className="discourse-row-score">{m.score.toLocaleString()}</span>
+          <span className="discourse-row-time">{timeAgo(m.date)}</span>
+        </a>
+      ))}
+    </div>
+  )
 }

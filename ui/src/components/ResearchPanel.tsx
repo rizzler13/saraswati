@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+/**
+ * ResearchPanel — Chat interface for talking with a paper.
+ * Slide-out panel with conversation history.
+ */
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { MarkdownMathRenderer } from './viz/KaTeXRenderer'
+import { MermaidRenderer } from './viz/MermaidRenderer'
+import { API_BASE_URL } from '../config'
 import type { Paper } from '../App'
-import {
-  buildSystemPrompt,
-  buildContextBlock,
-  getSuggestedPrompts,
-  findRelatedPapers,
-  type ResearchMessage,
-} from '../lib/research'
+import { useAuth, type ChatMessage } from './auth/AuthContext'
 
 interface ResearchPanelProps {
   paper: Paper
@@ -14,208 +15,255 @@ interface ResearchPanelProps {
   onClose: () => void
 }
 
-export function ResearchPanel({
-  paper,
-  allPapers,
-  onClose,
-}: ResearchPanelProps) {
-  const [messages, setMessages] = useState<ResearchMessage[]>([])
+export function ResearchPanel({ paper, onClose }: ResearchPanelProps) {
+  const { chats, saveChatMessage } = useAuth()
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [width, setWidth] = useState(480)
+  const [isExpanded, setIsExpanded] = useState(false)
+  
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isResizing = useRef(false)
 
-  const related = findRelatedPapers(paper, allPapers)
-  const prompts = getSuggestedPrompts(paper)
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [onClose])
-
+  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages, loading])
+  }, [messages])
 
-  async function sendMessage(query: string) {
-    if (!query.trim() || loading) return
+  // Load chat history from AuthContext
+  useEffect(() => {
+    const matchingChat = chats.find(c => c.paperId === paper.id)
+    setMessages(matchingChat ? matchingChat.messages : [])
+  }, [paper.id, chats])
 
-    const userMsg: ResearchMessage = { role: 'user', content: query }
-    const updated = [...messages, userMsg]
-    setMessages(updated)
+  // Toggle expansion
+  const toggleExpand = () => {
+    setIsExpanded(prev => {
+      const next = !prev
+      setWidth(next ? 850 : 480)
+      return next
+    })
+  }
+
+  // Resizing logic
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing.current) return
+    const newWidth = window.innerWidth - e.clientX
+    if (newWidth > 320 && newWidth < window.innerWidth * 0.95) {
+      setWidth(newWidth)
+      setIsExpanded(newWidth > 640)
+    }
+  }, [])
+
+  const stopResizing = useCallback(() => {
+    isResizing.current = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', stopResizing)
+  }, [handleMouseMove])
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', stopResizing)
+  }
+
+  // Cleanup event listeners
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', stopResizing)
+    }
+  }, [handleMouseMove, stopResizing])
+
+  const sendMessage = async () => {
+    const query = input.trim()
+    if (!query || isLoading) return
+
+    const userMsg: ChatMessage = { role: 'user', content: query, timestamp: Date.now() }
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     setInput('')
-    setLoading(true)
+    setIsLoading(true)
+
+    // Save user message to parent document
+    saveChatMessage(paper.id, paper.title, updatedMessages)
 
     try {
-      const context = buildContextBlock(paper, related)
-      const system = buildSystemPrompt()
-
-      const chatMessages = [
-        { role: 'system', content: system + '\n\n' + context },
-        ...updated.map(m => ({ role: m.role, content: m.content })),
-      ]
-
-      const res = await fetch('/.netlify/functions/research', {
+      const resp = await fetch(`${API_BASE_URL}/api/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatMessages }),
+        body: JSON.stringify({
+          query,
+          paper_id: paper.id,
+          paper_title: paper.title,
+          paper_abstract: paper.abstract,
+          history: updatedMessages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+        }),
       })
 
-      if (!res.ok) {
-        const err = await res.text()
-        throw new Error(err || `HTTP ${res.status}`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: data.content || 'No response.',
+        agent: data.agent,
+        timestamp: Date.now(),
       }
+      
+      const finalMessages = [...updatedMessages, assistantMsg]
+      setMessages(finalMessages)
 
-      const data = await res.json()
-      const reply = data.content || 'No response received.'
+      // Save assistant response to parent document
+      saveChatMessage(paper.id, paper.title, finalMessages)
 
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: reply },
-      ])
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Request failed'
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: `Error: ${msg}` },
-      ])
+    } catch (e: any) {
+      const errorMsg: ChatMessage = {
+        role: 'assistant',
+        content: `Error: ${e.message}. Check that the backend is running and API keys are configured.`,
+        agent: 'error',
+        timestamp: Date.now(),
+      }
+      const finalMessages = [...updatedMessages, errorMsg]
+      setMessages(finalMessages)
+
+      saveChatMessage(paper.id, paper.title, finalMessages)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage(input)
+      sendMessage()
     }
+  }
+
+
+  // Check for mermaid blocks in content
+  const renderContent = (content: string) => {
+    const mermaidRegex = /```mermaid\n([\s\S]*?)```/g
+    const parts: { type: 'text' | 'mermaid'; value: string }[] = []
+    let lastIndex = 0
+    let match
+
+    while ((match = mermaidRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ type: 'text', value: content.slice(lastIndex, match.index) })
+      }
+      parts.push({ type: 'mermaid', value: match[1] })
+      lastIndex = match.index + match[0].length
+    }
+    if (lastIndex < content.length) {
+      parts.push({ type: 'text', value: content.slice(lastIndex) })
+    }
+
+    return parts.map((part, i) => {
+      if (part.type === 'mermaid') {
+        return <MermaidRenderer key={i} code={part.value} />
+      }
+      return <MarkdownMathRenderer key={i} text={part.value} />
+    })
   }
 
   return (
-    <div
-      className="research-overlay"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="research-panel">
-        <div className="research-header">
-          <span className="research-header-title">
-            Deep Research
-          </span>
-          <button className="research-close" onClick={onClose}>
-            ×
-          </button>
+    <div className="research-panel-overlay" onClick={onClose}>
+      <div 
+        className={`research-panel ${isExpanded ? 'expanded' : ''}`} 
+        style={{ width: `${width}px` }} 
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Resize Handle on the left border */}
+        <div 
+          className="research-panel-resize-handle" 
+          onMouseDown={startResizing}
+          onDoubleClick={toggleExpand}
+          title="Drag to resize, double-click to toggle width"
+        />
+
+        {/* Header */}
+        <div className="research-panel-header">
+          <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+            <h3 className="research-panel-title">Chat with Paper</h3>
+            <p className="research-panel-paper" title={paper.title}>{paper.title}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <button 
+              className="research-panel-expand-btn" 
+              onClick={toggleExpand}
+              title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+            >
+              {isExpanded ? 'Collapse' : 'Expand'}
+            </button>
+            <button className="research-panel-close" onClick={onClose}>×</button>
+          </div>
         </div>
 
-        <div className="research-context">
-          <div className="research-context-title">
-            {paper.title}
-          </div>
-          <div className="research-context-meta">
-            {paper.source || 'arxiv'} · {paper.date}
-            {paper.authors?.length
-              ? ` · ${paper.authors.slice(0, 3).join(', ')}`
-              : ''}
-          </div>
-        </div>
-
-        <div className="research-messages" ref={scrollRef}>
-          {messages.length === 0 && !loading && (
-            <div className="research-msg" style={{ color: 'var(--text-muted)' }}>
-              Ask a question about this paper, or pick a
-              suggested prompt below.
+        {/* Messages */}
+        <div className="research-panel-messages" ref={scrollRef}>
+          {messages.length === 0 && (
+            <div className="research-panel-welcome">
+              <p>Ask anything about this paper:</p>
+              <div className="research-panel-suggestions">
+                {[
+                  'Summarize the key contributions',
+                  'Explain the main equation',
+                  'What are the limitations?',
+                  'Draw the architecture diagram',
+                ].map(q => (
+                  <button key={q} className="research-panel-suggestion" onClick={() => { setInput(q); }}>
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {messages.map((msg, i) => (
-            <div key={i} className={`research-msg ${msg.role}`}>
-              <RenderMarkdown text={msg.content} />
+            <div key={i} className={`research-msg research-msg-${msg.role}`}>
+              {msg.agent && msg.role === 'assistant' && (
+                <div className="research-msg-agent">{msg.agent} agent</div>
+              )}
+              <div className="research-msg-content">
+                {msg.role === 'assistant' ? renderContent(msg.content) : msg.content}
+              </div>
             </div>
           ))}
 
-          {loading && (
-            <div className="research-loading">
-              <span className="research-loading-dot" />
-              <span className="research-loading-dot"
-                style={{ animationDelay: '0.2s' }} />
-              <span className="research-loading-dot"
-                style={{ animationDelay: '0.4s' }} />
-              <span>Researching...</span>
+          {isLoading && (
+            <div className="research-msg research-msg-assistant">
+              <div className="research-msg-loading">
+                <div className="loading-spinner" style={{ width: 16, height: 16 }} />
+                Thinking...
+              </div>
             </div>
           )}
         </div>
 
-        {messages.length === 0 && !loading && (
-          <div className="research-prompts">
-            {prompts.map((p, i) => (
-              <button
-                key={i}
-                className="research-prompt-btn"
-                onClick={() => sendMessage(p)}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="research-input-bar">
-          <input
-            className="research-input"
+        {/* Input */}
+        <div className="research-panel-input-wrap">
+          <textarea
+            className="research-panel-input"
+            placeholder="Ask about this paper..."
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this paper..."
-            disabled={loading}
+            rows={2}
           />
           <button
-            className="research-send"
-            onClick={() => sendMessage(input)}
-            disabled={loading || !input.trim()}
+            className="research-panel-send"
+            onClick={sendMessage}
+            disabled={isLoading || !input.trim()}
           >
-            Send
+            →
           </button>
         </div>
       </div>
     </div>
   )
-}
-
-function RenderMarkdown({ text }: { text: string }) {
-  const html = simpleMarkdown(text)
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
-}
-
-function simpleMarkdown(text: string): string {
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-  // headings
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-
-  // bold and italic
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-  // inline code
-  html = html.replace(/`(.+?)`/g, '<code>$1</code>')
-
-  // unordered lists
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-
-  // paragraphs
-  html = html.replace(/\n\n/g, '</p><p>')
-  html = '<p>' + html + '</p>'
-  html = html.replace(/<p>\s*<(h[123]|ul|ol)/g, '<$1')
-  html = html.replace(/<\/(h[123]|ul|ol)>\s*<\/p>/g, '</$1>')
-
-  return html
 }

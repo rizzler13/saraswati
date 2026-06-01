@@ -1,50 +1,68 @@
 # Project Saraswati
 
-Realtime Research Radar. Monitors scientific knowledge flow, detects new papers, tracks viral spread, and visualizes idea clusters.
+Realtime Research Radar. Monitors scientific knowledge flow, crawls new research, tracks code repository signals, and provides an agentic deep-dive explanation engine.
 
 ## Features
 
-- Paper Detection: Monitors ArXiv, BioRxiv, and HuggingFace for new research.
-- Discourse Tracking: Follows scientific discussions on Reddit, Twitter/X, and Hacker News.
-- Knowledge Graph: Stores relationships in Memgraph (papers, authors, concepts).
-- 3D Visualization: Force-directed graph showing idea clusters.
-- Memory Efficient: Designed to run efficiently on standard consumer hardware.
+- **High-Scale Ingestion**: Crawls arXiv categories (`cs.AI`, `cs.LG`, `cs.CL`, `cs.CV`, `cs.MA`, etc.) and HuggingFace daily trending entries with automated rate-limiting queue controls.
+- **Papers with Code Alignment**: Automatically parses and extracts GitHub repositories from abstracts, fetching stars, forks, and star growth rates (velocity).
+- **Ranking Engine**: Ranks papers dynamically based on:
+  $$\text{Score} = (\text{HF Upvotes} \times 10) + (\text{GitHub Stars} \times 0.5) + \text{Velocity}$$
+- **Agent Chat**: Dedicated AI Agent tab to discuss paper contents with routing optimized across Groq, OpenRouter, and Cerebras APIs.
+- **Deep Dives**: Automatically downloads PDFs, extracts content, and writes comprehensive multi-chapter blog posts/articles about papers.
+- **Local Database**: Stores thousands of papers and repository records locally in SQLite for fast paginated queries (<5ms database response).
 
 ## Architecture
 
-- Frontend (React): PaperList, StatsPanel, 3D GraphView
-- Backend (C++ / Drogon): Crawlers, Parsers, API, Enrichment
-- Database (Memgraph): Knowledge graph storage via Docker
+- **Frontend (React + Vite)**: Paginated PaperList, StatsPanel, 3D GraphView, AgentChat, ProfilePage.
+- **Backend (Python + FastAPI)**: Uvicorn API server, background tasks, LLM agents (summary, math, visualization, critique) powered by LiteLLM.
+- **Database (SQLite)**: Local high-performance file-based storage (`data/saraswati.db`).
 
-## Quick Start (Docker - Recommended)
+## Quick Start (Local Environment)
 
-The easiest way to run Project Saraswati on **any operating system** (Windows, macOS, Linux) is using Docker. This avoids needing to install C++ compilers or database instances locally.
+### Prerequisites
+- Python 3.11 or higher
+- Node.js (v18+) and npm
+- A Groq API Key (and optionally Cerebras or OpenRouter keys for upgraded reasoning)
 
-### Installation
+### 1. Set Up Environment Variables
+Create a `.env` file in the root directory:
+```env
+GROQ_API_KEY=gsk_...
+# Optional keys:
+CEREBRAS_API_KEY=csk_...
+OPENROUTER_API_KEY=sk-or-v1-...
+```
 
-Clone the repository 
+### 2. Run the Backend
+```bash
+# Set up a Python virtual environment
+cd research
+python3 -m venv .venv
+source .venv/bin/activate
 
-`git clone https://github.com/rizzler13/asl-qc.git`
-`cd saraswati`
+# Install dependencies
+pip install fastapi "uvicorn[standard]" litellm langgraph langchain-core pymupdf httpx pydantic python-dotenv
 
-This single script will:
-1. Start the Memgraph database.
-2. Build the C++ Backend natively within an isolated Ubuntu container.
-3. Build the React/Vite Frontend statically and serve it securely via Nginx.
-4. Auto-open your web browser to http://localhost:5173
+# Run the FastAPI server (run from the project root directory)
+cd ..
+python -m uvicorn research.server:app --host 0.0.0.0 --port 8081
+```
 
-### Useful Commands
+### 3. Run the Frontend
+```bash
+# In a new terminal tab/window
+cd ui
+npm install
+npm run dev
+```
 
-**Frontend Dashboard**: navigate to ui/ and run `npm run dev`
-**Backend API**: run `build ninja` in build file and `./saraswati` which will load the backend
+Open your browser to [http://localhost:5173](http://localhost:5173) to access the dashboard.
 
+## Useful Commands
 
-## Manual Build (Local Environment)
-
-For developers wanting to build the backend manually and work on the raw C++ code externally from Docker, please refer to the detailed guide in [BUILD.md](BUILD.md).
-
-
-## Production Deployment - Will shortly be deployed (under progress)
+- **Backend healthcheck**: `curl http://localhost:8081/health`
+- **FastAPI OpenAPI docs**: [http://localhost:8081/docs](http://localhost:8081/docs)
 
 ## License
 
