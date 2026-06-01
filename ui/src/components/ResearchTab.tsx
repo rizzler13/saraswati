@@ -22,9 +22,8 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
   const [generatingPaper, setGeneratingPaper] = useState<Paper | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [availableDives, setAvailableDives] = useState<{ paper_id: string; title: string; generated_at: number; status: string }[]>([])
-  const [currentInitialPaper, setCurrentInitialPaper] = useState<Paper | null>(null)
-  
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const generatedPaperIdRef = useRef<string | null>(null)
 
   // Fetch available deep dives
   const fetchAvailable = useCallback(async () => {
@@ -117,12 +116,16 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
 
   // Auto-generate if initialPaper was provided and is new
   useEffect(() => {
-    if (initialPaper && initialPaper.id !== currentInitialPaper?.id) {
-      setCurrentInitialPaper(initialPaper)
-      generateDeepDive(initialPaper)
+    if (initialPaper) {
+      if (initialPaper.id !== generatedPaperIdRef.current) {
+        generatedPaperIdRef.current = initialPaper.id
+        generateDeepDive(initialPaper)
+      }
+    } else {
+      generatedPaperIdRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPaper, currentInitialPaper])
+  }, [initialPaper])
 
   // Filter completed deep dives
   const completedDives = availableDives.filter(d => d.status === 'complete')
