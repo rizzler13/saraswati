@@ -24,3 +24,7 @@ services:
       name: saraswati-db-volume
       mountPath: /data
       sizeGB: 1
+
+# Keep-alive cron: pings /health every 14 minutes to prevent free-tier spin-down
+# NOTE: Render free tier cron jobs are limited. If this doesn't work,
+# use https://cron-job.org (free) to hit your /health endpoint instead.
