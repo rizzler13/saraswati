@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: saraswati-backend
+    env: python
+    # Build command runs pip install on the local python package
+    buildCommand: "pip install -e ./research"
+    # Start command launches uvicorn on the correct port and host
+    startCommand: "python -m uvicorn research.server:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/saraswati.db
+      # Add placeholders for keys that you can fill in on the Render Dashboard
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+    disk:
+      name: saraswati-db-volume
+      mountPath: /data
+      sizeGB: 1
