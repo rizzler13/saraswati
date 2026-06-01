@@ -15,6 +15,13 @@
 #   VITE_FIREBASE_MESSAGING_SENDER_ID = 885287552665
 #   VITE_FIREBASE_APP_ID = 1:885287552665:web:8096c5bfbf03150dadda08
 
+# Proxy API requests to Render backend to avoid CORS and env configuration issues
+[[redirects]]
+  from = "/api/*"
+  to = "https://saraswati-0tnd.onrender.com/api/:splat"
+  status = 200
+  force = true
+
 # SPA redirect: all paths serve index.html
 [[redirects]]
   from = "/*"
