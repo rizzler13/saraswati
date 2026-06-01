@@ -2539,3 +2539,62 @@ research-paper-tags {
   display: inline-block;
   padding: 0 2px;
 }
+
+/* Mobile Responsiveness for Navbar & Layout */
+@media (max-width: 768px) {
+  :root {
+    --header-h: 56px;
+  }
+  .navbar-inner {
+    padding: 0 16px;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  .logo-text {
+    display: none; /* Hide logo text, only show logo icon on mobile */
+  }
+  .nav-links {
+    gap: 4px;
+  }
+  .nav-link {
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  .nav-search input {
+    width: 120px;
+  }
+  .nav-search input:focus {
+    width: 150px;
+  }
+  .page-full {
+    padding: 16px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-inner {
+    gap: 8px;
+  }
+  .nav-links {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    max-width: calc(100vw - 180px); /* Let tabs scroll horizontally if too narrow */
+    padding-bottom: 2px;
+  }
+  .nav-link {
+    flex-shrink: 0;
+  }
+  .nav-search input {
+    width: 90px;
+    font-size: 12px;
+    padding: 4px 8px 4px 24px;
+  }
+  .nav-search input:focus {
+    width: 110px;
+  }
+  .nav-search-icon {
+    left: 6px;
+    font-size: 11px;
+  }
+}
