@@ -157,15 +157,15 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
         </div>
 
         {/* Search bar */}
-        <div style={{ maxWidth: 680, margin: '0 auto 32px', padding: '0 20px' }}>
-          <div className="search-bar" style={{ maxWidth: '100%' }}>
-            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="research-search-wrap">
+          <div className="research-search-bar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
               type="text"
-              className="search-input"
+              className="research-search-input"
               placeholder="Search papers on arXiv... e.g. 'vision transformer', 'federated learning'"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
