@@ -137,6 +137,52 @@ def _set_cached(key: str, data: list[Paper]):
 
 # --- HuggingFace Daily Papers ---
 
+def _parse_hf_response_data(data: list) -> list[Paper]:
+    """Parse raw HuggingFace daily papers JSON data into Paper objects."""
+    papers = []
+    if not isinstance(data, list):
+        return papers
+
+    for item in data:
+        paper_data = item.get("paper", item)
+        arxiv_id = paper_data.get("id", "")
+        title = paper_data.get("title", "")
+        summary = paper_data.get("summary", paper_data.get("abstract", ""))
+        authors = []
+        for a in paper_data.get("authors", []):
+            if isinstance(a, dict):
+                name = a.get("name", a.get("user", {}).get("fullname", ""))
+                if name:
+                    authors.append(name)
+            elif isinstance(a, str):
+                authors.append(a)
+
+        upvotes = item.get("paper", {}).get("upvotes", 0) if isinstance(item.get("paper"), dict) else item.get("upvotes", 0)
+        if not upvotes:
+            upvotes = item.get("numUpvotes", 0)
+
+        pub_date = paper_data.get("publishedAt", paper_data.get("date", ""))
+        if pub_date and "T" in pub_date:
+            pub_date = pub_date[:10]
+
+        tags = _guess_tags(title + " " + summary)
+
+        papers.append(Paper(
+            id=arxiv_id,
+            title=title,
+            abstract=summary[:1500] if summary else "",
+            authors=authors[:10],
+            date=pub_date,
+            source="huggingface",
+            url=f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "",
+            score=upvotes * 10,
+            hf_upvotes=upvotes,
+            category=tags[0] if tags else "Machine Learning",
+            tags=tags,
+            pdf_url=f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else "",
+        ))
+    return papers
+
 async def fetch_huggingface_daily(client: httpx.AsyncClient) -> list[Paper]:
     """
     Fetch today's top papers from HuggingFace.
@@ -153,50 +199,7 @@ async def fetch_huggingface_daily(client: httpx.AsyncClient) -> list[Paper]:
             logger.warning(f"HF daily papers returned {resp.status_code}")
             return papers
 
-        data = resp.json()
-        if not isinstance(data, list):
-            logger.warning("HF daily papers returned non-list")
-            return papers
-
-        for item in data:
-            paper_data = item.get("paper", item)
-            arxiv_id = paper_data.get("id", "")
-            title = paper_data.get("title", "")
-            summary = paper_data.get("summary", paper_data.get("abstract", ""))
-            authors = []
-            for a in paper_data.get("authors", []):
-                if isinstance(a, dict):
-                    name = a.get("name", a.get("user", {}).get("fullname", ""))
-                    if name:
-                        authors.append(name)
-                elif isinstance(a, str):
-                    authors.append(a)
-
-            upvotes = item.get("paper", {}).get("upvotes", 0) if isinstance(item.get("paper"), dict) else item.get("upvotes", 0)
-            if not upvotes:
-                upvotes = item.get("numUpvotes", 0)
-
-            pub_date = paper_data.get("publishedAt", paper_data.get("date", ""))
-            if pub_date and "T" in pub_date:
-                pub_date = pub_date[:10]
-
-            tags = _guess_tags(title + " " + summary)
-
-            papers.append(Paper(
-                id=arxiv_id,
-                title=title,
-                abstract=summary[:1500] if summary else "",
-                authors=authors[:10],
-                date=pub_date,
-                source="huggingface",
-                url=f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "",
-                score=upvotes * 10,
-                hf_upvotes=upvotes,
-                category=tags[0] if tags else "Machine Learning",
-                tags=tags,
-                pdf_url=f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else "",
-            ))
-
+        papers = _parse_hf_response_data(resp.json())
         papers.sort(key=lambda p: p.hf_upvotes, reverse=True)
         logger.info(f"Fetched {len(papers)} papers from HuggingFace daily")
         _set_cached("hf_daily", papers)
@@ -205,6 +208,41 @@ async def fetch_huggingface_daily(client: httpx.AsyncClient) -> list[Paper]:
         logger.error(f"HF daily papers fetch failed: {e}")
 
     return papers
+
+async def crawl_huggingface_historical(
+    client: httpx.AsyncClient,
+    days_back: int = 30,
+) -> list[Paper]:
+    """Crawl HuggingFace daily papers for the last N days to build historical database."""
+    import datetime
+    all_papers = []
+
+    today = datetime.date.today()
+    for i in range(days_back):
+        date_str = (today - datetime.timedelta(days=i)).isoformat()
+        url = f"{HF_DAILY_API}?date={date_str}"
+        logger.info(f"Crawling HF daily papers for date: {date_str}...")
+
+        try:
+            resp = await client.get(url, timeout=15.0)
+            if resp.status_code == 200:
+                papers = _parse_hf_response_data(resp.json())
+                for p in papers:
+                    p.date = date_str
+                all_papers.extend(papers)
+                logger.info(f"Fetched {len(papers)} papers for HF {date_str}")
+            elif resp.status_code == 429:
+                logger.warning("HF rate limited during historical crawl, sleeping 10s...")
+                await asyncio.sleep(10.0)
+            else:
+                logger.debug(f"HF daily papers returned {resp.status_code} for {date_str}")
+        except Exception as e:
+            logger.warning(f"Failed to crawl HF papers for {date_str}: {e}")
+
+        # Throttling to respect HF API limits
+        await asyncio.sleep(2.0)
+
+    return all_papers
 
 
 # --- arXiv API ---
@@ -643,6 +681,22 @@ async def _background_refresh_task(client: httpx.AsyncClient):
 async def _refresh_papers_now(client: httpx.AsyncClient) -> list[Paper]:
     # 1. Fetch HF daily papers
     hf_papers = await fetch_huggingface_daily(client)
+
+    # Automatically backfill historical daily papers if database is empty/low on HF papers
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT count(*) FROM papers WHERE source = 'huggingface'")
+        row = cursor.fetchone()
+        hf_count = row[0] if row else 0
+        conn.close()
+
+        if hf_count < 100:
+            logger.info(f"HuggingFace papers count in DB ({hf_count}) is low. Backfilling 30 days...")
+            hf_historical = await crawl_huggingface_historical(client, days_back=30)
+            hf_papers.extend(hf_historical)
+    except Exception as e:
+        logger.error(f"Failed checking/backfilling HF historical papers: {e}")
 
     # 2. Crawl arXiv categories (cs.AI, cs.LG, cs.CL, cs.CV, cs.MA)
     categories_to_crawl = ["cs.AI", "cs.LG", "cs.CL", "cs.CV", "cs.MA"]

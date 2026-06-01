@@ -1,9 +1,14 @@
 import json
 import sqlite3
+import os
 from pathlib import Path
 from typing import Optional, Any
 
-DB_PATH = Path(__file__).parent.parent.parent / "data" / "saraswati.db"
+DB_PATH_ENV = os.getenv("DATABASE_PATH")
+if DB_PATH_ENV:
+    DB_PATH = Path(DB_PATH_ENV)
+else:
+    DB_PATH = Path(__file__).parent.parent.parent / "data" / "saraswati.db"
 
 def init_db():
     """Initialize the SQLite database and create tables/indexes if not exist."""
