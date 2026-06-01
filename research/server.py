@@ -124,6 +124,8 @@ async def get_client() -> httpx.AsyncClient:
     return _client
 
 
+_startup_tasks = set()
+
 @app.on_event("startup")
 async def startup():
     """Initialize SQLite database and run a background task to refresh papers."""
@@ -135,8 +137,10 @@ async def startup():
         # Trigger background crawl on startup asynchronously
         client = await get_client()
         from .sources.papers import get_trending_papers
-        asyncio.create_task(get_trending_papers(client))
-        logger.info("Triggered initial background papers crawl.")
+        task = asyncio.create_task(get_trending_papers(client))
+        _startup_tasks.add(task)
+        task.add_done_callback(_startup_tasks.discard)
+        logger.info("Triggered initial background papers crawl (strong reference held).")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -503,8 +507,21 @@ async def graph():
 
 
 # ===================================================================
-#  HEALTH
+#  DIAGNOSTICS & HEALTH
 # ===================================================================
+
+@app.get("/api/admin/trigger_crawl")
+async def trigger_crawl():
+    """Manually trigger the papers crawl and return the result synchronously for debugging."""
+    client = await get_client()
+    try:
+        logger.info("Manually triggering papers crawl via admin endpoint...")
+        from .sources.papers import _refresh_papers_now
+        papers = await _refresh_papers_now(client)
+        return {"status": "success", "papers_crawled": len(papers)}
+    except Exception as e:
+        logger.error(f"Manual papers crawl failed: {e}")
+        return {"status": "failed", "error": str(e)}
 
 @app.get("/health")
 async def health():

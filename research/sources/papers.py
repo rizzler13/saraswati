@@ -658,6 +658,7 @@ async def get_trending_papers(client: httpx.AsyncClient) -> list[Paper]:
 
 _last_refresh_time = 0.0
 _REFRESH_COOLDOWN = 1800.0  # 30 minutes cooldown
+_background_tasks = set()
 
 def _trigger_background_refresh(client: httpx.AsyncClient):
     global _is_refreshing
@@ -669,7 +670,9 @@ def _trigger_background_refresh(client: httpx.AsyncClient):
         return
 
     _is_refreshing = True
-    asyncio.create_task(_background_refresh_task(client))
+    task = asyncio.create_task(_background_refresh_task(client))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 async def _background_refresh_task(client: httpx.AsyncClient):
     global _is_refreshing, _last_refresh_time
