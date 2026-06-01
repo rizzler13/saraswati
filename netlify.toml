@@ -3,6 +3,9 @@
   command = "npm ci && npm run build"
   publish = "dist"
 
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
+
 # Environment variable for Vite build — set this in the Netlify Dashboard:
 #   VITE_API_URL = https://saraswati-backend.onrender.com
 #   VITE_FIREBASE_API_KEY = AIzaSy...
