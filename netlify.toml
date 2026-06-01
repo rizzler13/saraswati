@@ -3,6 +3,15 @@
   command = "npm ci && npm run build"
   publish = "dist"
 
+# Environment variable for Vite build — set this in the Netlify Dashboard:
+#   VITE_API_URL = https://saraswati-backend.onrender.com
+#   VITE_FIREBASE_API_KEY = AIzaSy...
+#   VITE_FIREBASE_AUTH_DOMAIN = saraswati-593cc.firebaseapp.com
+#   VITE_FIREBASE_PROJECT_ID = saraswati-593cc
+#   VITE_FIREBASE_STORAGE_BUCKET = saraswati-593cc.firebasestorage.app
+#   VITE_FIREBASE_MESSAGING_SENDER_ID = 885287552665
+#   VITE_FIREBASE_APP_ID = 1:885287552665:web:8096c5bfbf03150dadda08
+
 # SPA redirect: all paths serve index.html
 [[redirects]]
   from = "/*"
