@@ -54,6 +54,31 @@ function correctMermaidSyntax(rawCode: string): string {
   }
   c = c.trim()
 
+  // Detect all subgraph IDs to avoid naming collisions with nodes
+  const subgraphIds = new Set<string>()
+  const subgraphRegex = /^\s*subgraph\s+([a-zA-Z0-9_-]+)/i
+  c.split('\n').forEach(line => {
+    const match = line.match(subgraphRegex)
+    if (match) {
+      subgraphIds.add(match[1])
+    }
+  })
+
+  // If any line does not define a subgraph, rename node IDs that collide with subgraph IDs
+  if (subgraphIds.size > 0) {
+    c = c.split('\n').map(line => {
+      if (/^\s*subgraph\b/i.test(line)) {
+        return line
+      }
+      let updatedLine = line
+      subgraphIds.forEach(id => {
+        const regex = new RegExp(`\\b${id}\\b`, 'g')
+        updatedLine = updatedLine.replace(regex, `${id}_node`)
+      });
+      return updatedLine
+    }).join('\n')
+  }
+
   // Shape definitions ordered by specificity (multi-char openers first)
   const shapes = [
     { open: '([', close: '])' },
