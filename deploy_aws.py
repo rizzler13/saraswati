@@ -52,8 +52,11 @@ def check_requirements():
         
     # Check Docker
     try:
-        subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
         print("✅ Docker is running.")
+    except subprocess.TimeoutExpired:
+        print("❌ Error: Docker check timed out (10s). Please check if Docker Desktop is frozen or if macOS is prompting for keychain access.")
+        sys.exit(1)
     except Exception:
         print("❌ Error: Docker is not running or not installed. AWS Lambda container build requires Docker.")
         sys.exit(1)
