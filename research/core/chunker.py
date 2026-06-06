@@ -287,11 +287,11 @@ async def summarize_chunks(
     """
     from .llm import complete
 
-    # Pick the cheapest/fastest model for chunk summarization
-    summary_model = _pick_cheap_model()
+    # Pick the cheapest/fastest models for chunk summarization
+    primary, fallback, emergency = _pick_cheap_models()
     logger.info(
         f"Summarizing {len(chunks)} chunks for '{paper_title}' "
-        f"using {summary_model}"
+        f"using chain: {primary} → {fallback} → {emergency}"
     )
 
     summaries = []
@@ -319,7 +319,9 @@ async def summarize_chunks(
                 },
             ]
             summary = await complete(
-                model=summary_model,
+                model=primary,
+                fallback=fallback,
+                emergency=emergency,
                 messages=messages,
                 max_tokens=1024,
                 temperature=0.1,
@@ -330,21 +332,37 @@ async def summarize_chunks(
         except Exception as e:
             logger.warning(f"Chunk {i+1} summarization failed: {e}")
             # Fallback: use first 2000 chars of the raw chunk
-            fallback = chunk[:2000] + "..." if len(chunk) > 2000 else chunk
-            summaries.append(fallback)
+            fallback_text = chunk[:2000] + "..." if len(chunk) > 2000 else chunk
+            summaries.append(fallback_text)
 
     return summaries
 
 
-def _pick_cheap_model() -> str:
-    """Pick the cheapest available model for chunk summarization."""
-    if os.getenv("CEREBRAS_API_KEY"):
-        return "cerebras/llama-3.3-70b"
-    if os.getenv("GROQ_API_KEY"):
-        return "groq/llama-3.1-8b-instant"
-    if os.getenv("OPENROUTER_API_KEY"):
-        return "openrouter/meta-llama/llama-3.1-8b-instruct"
-    return "groq/llama-3.1-8b-instant"
+def _pick_cheap_models() -> tuple[str, Optional[str], Optional[str]]:
+    """Pick cheap models (primary, fallback, emergency) for chunk summarization.
+
+    Prefer Cerebras (blazing fast & doesn't touch Groq TPM limits),
+    falling back to Groq Llama 3.1 8B, then OpenRouter Llama 3.1 8B.
+    """
+    has_cerebras = bool(os.getenv("CEREBRAS_API_KEY"))
+    has_groq = bool(os.getenv("GROQ_API_KEY"))
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+
+    options = []
+    if has_cerebras:
+        options.append("cerebras/llama3.1-8b")
+    if has_groq:
+        options.append("groq/llama-3.1-8b-instant")
+    if has_or:
+        options.append("openrouter/meta-llama/llama-3.1-8b-instruct")
+
+    if not options:
+        return "groq/llama-3.1-8b-instant", None, None
+
+    primary = options[0]
+    fallback = options[1] if len(options) > 1 else "groq/llama-3.1-8b-instant"
+    emergency = options[2] if len(options) > 2 else "groq/llama-3.1-8b-instant"
+    return primary, fallback, emergency
 
 
 # ===========================================================================

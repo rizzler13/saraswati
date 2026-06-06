@@ -272,8 +272,8 @@ async def generate_deep_dive_content(
         paper_body = paper_digest
         logger.info(f"Using paper digest ({len(paper_digest)} chars) instead of raw text")
     else:
-        paper_body = f"FULL PAPER TEXT:\n{full_text[:30000]}"
-        logger.info(f"No digest available, using truncated text ({min(len(full_text), 30000)} chars)")
+        paper_body = f"FULL PAPER TEXT:\n{full_text[:12000]}"
+        logger.info(f"No digest available, using truncated text ({min(len(full_text), 12000)} chars)")
 
     context = f"""PAPER TITLE: {paper_title}
 AUTHORS: {', '.join(paper_authors[:5])}

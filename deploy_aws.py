@@ -308,8 +308,12 @@ def deploy_lambda_function(lambda_client, image_uri, role_arn, cache_bucket):
             "DATABASE_URL": DATABASE_URL,
             "S3_BUCKET_NAME": cache_bucket,
             "GROQ_API_KEY": os.getenv("GROQ_API_KEY") or "",
+            "GROQ_ALT_API_KEY": os.getenv("GROQ_ALT_API_KEY") or "",
             "OPENROUTER_API_KEY": os.getenv("OPENROUTER_API_KEY") or "",
-            "CEREBRAS_API_KEY": os.getenv("CEREBRAS_API_KEY") or ""
+            "OPENROUTER_ALT_API_KEY": os.getenv("OPENROUTER_ALT_API_KEY") or "",
+            "CEREBRAS_API_KEY": os.getenv("CEREBRAS_API_KEY") or "",
+            "CEREBRAS_ALT_API_KEY": os.getenv("CEREBRAS_ALT_API_KEY") or "",
+            "CEREBRAS_ALT2_API_KEY": os.getenv("CEREBRAS_ALT2_API_KEY") or ""
         }
     }
     
