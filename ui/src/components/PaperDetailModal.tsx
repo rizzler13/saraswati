@@ -89,7 +89,7 @@ export function PaperDetailModal({
         <div className="modal-actions">
           {onDeepResearch && (
             <button
-              className="btn btn-primary"
+              className="btn btn-outline"
               onClick={() => onDeepResearch(paper)}
               id="btn-deep-dive"
             >

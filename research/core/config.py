@@ -74,37 +74,71 @@ class ResearchConfig:
     def from_env(cls) -> "ResearchConfig":
         config = cls()
         
-        has_or = bool(os.getenv("OPENROUTER_API_KEY"))
         has_cerebras = bool(os.getenv("CEREBRAS_API_KEY"))
+        has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+        has_groq = bool(os.getenv("GROQ_API_KEY"))
 
-        # Configure Summary Agent routing chain
+        # Summary & Critique agents fallback lists
+        summary_options = []
         if has_cerebras:
-            config.summary_agent = ProviderConfig(
-                model="groq/llama-3.3-70b-versatile",
-                fallback="cerebras/llama-3.3-70b",
-                emergency="openrouter/meta-llama/llama-3.3-70b-instruct" if has_or else "groq/llama-3.1-8b-instant",
-                api_key_env="GROQ_API_KEY",
-            )
-        elif has_or:
-            config.summary_agent = ProviderConfig(
-                model="groq/llama-3.3-70b-versatile",
-                fallback="openrouter/meta-llama/llama-3.3-70b-instruct",
-                emergency="groq/llama-3.1-8b-instant",
-                api_key_env="GROQ_API_KEY",
-            )
-
-        # Upgrade math agent if OpenRouter key available
+            summary_options.append(("cerebras/zai-glm-4.7", "CEREBRAS_API_KEY"))
         if has_or:
-            config.math_agent = ProviderConfig(
-                model="openrouter/deepseek/deepseek-r1",
-                fallback="groq/llama-3.3-70b-versatile",
-                emergency="groq/llama-3.1-8b-instant",
-                api_key_env="OPENROUTER_API_KEY",
-            )
-            config.viz_agent = ProviderConfig(
-                model="openrouter/qwen/qwen-2.5-coder-32b-instruct",
-                fallback="groq/llama-3.3-70b-versatile",
-                emergency="groq/llama-3.1-8b-instant",
-                api_key_env="OPENROUTER_API_KEY",
-            )
+            summary_options.append(("openrouter/meta-llama/llama-3.3-70b-instruct", "OPENROUTER_API_KEY"))
+        if has_groq:
+            summary_options.append(("groq/llama-3.3-70b-versatile", "GROQ_API_KEY"))
+            
+        if not summary_options:
+            summary_options = [("groq/llama-3.3-70b-versatile", "GROQ_API_KEY")]
+
+        config.summary_agent = ProviderConfig(
+            model=summary_options[0][0],
+            fallback=summary_options[1][0] if len(summary_options) > 1 else "groq/llama-3.1-8b-instant",
+            emergency=summary_options[2][0] if len(summary_options) > 2 else "groq/llama-3.1-8b-instant",
+            api_key_env=summary_options[0][1],
+        )
+        config.critique_agent = ProviderConfig(
+            model=summary_options[0][0],
+            fallback=summary_options[1][0] if len(summary_options) > 1 else "groq/llama-3.1-8b-instant",
+            emergency=summary_options[2][0] if len(summary_options) > 2 else "groq/llama-3.1-8b-instant",
+            api_key_env=summary_options[0][1],
+        )
+
+        # Math agent (reasoning-heavy) fallback lists
+        math_options = []
+        if has_cerebras:
+            math_options.append(("cerebras/zai-glm-4.7", "CEREBRAS_API_KEY"))
+        if has_or:
+            math_options.append(("openrouter/deepseek/deepseek-r1", "OPENROUTER_API_KEY"))
+        if has_groq:
+            math_options.append(("groq/llama-3.3-70b-versatile", "GROQ_API_KEY"))
+            
+        if not math_options:
+            math_options = [("groq/llama-3.3-70b-versatile", "GROQ_API_KEY")]
+
+        config.math_agent = ProviderConfig(
+            model=math_options[0][0],
+            fallback=math_options[1][0] if len(math_options) > 1 else "groq/llama-3.1-8b-instant",
+            emergency=math_options[2][0] if len(math_options) > 2 else "groq/llama-3.1-8b-instant",
+            api_key_env=math_options[0][1],
+        )
+
+        # Visualization agent (coding-heavy) fallback lists
+        viz_options = []
+        if has_cerebras:
+            viz_options.append(("cerebras/zai-glm-4.7", "CEREBRAS_API_KEY"))
+        if has_or:
+            viz_options.append(("openrouter/qwen/qwen-2.5-coder-32b-instruct", "OPENROUTER_API_KEY"))
+        if has_groq:
+            viz_options.append(("groq/llama-3.3-70b-versatile", "GROQ_API_KEY"))
+            
+        if not viz_options:
+            viz_options = [("groq/llama-3.3-70b-versatile", "GROQ_API_KEY")]
+
+        config.viz_agent = ProviderConfig(
+            model=viz_options[0][0],
+            fallback=viz_options[1][0] if len(viz_options) > 1 else "groq/llama-3.1-8b-instant",
+            emergency=viz_options[2][0] if len(viz_options) > 2 else "groq/llama-3.1-8b-instant",
+            api_key_env=viz_options[0][1],
+        )
+
         return config

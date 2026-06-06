@@ -1,20 +1,27 @@
 /**
  * AuthModal — Login/Signup modal with email+password and Google sign-in.
+ * Handles in-app browsers (LinkedIn, Instagram, etc.) gracefully:
+ * - Always shows Google sign-in (never hides it based on UA detection)
+ * - If Google OAuth fails with disallowed_useragent, shows escape hatch
+ * - Provides "Open in Browser" and "Copy Link" as recovery actions
  */
 import { useState } from 'react'
-import { useAuth } from './AuthContext'
+import { useAuth, isInAppBrowser } from './AuthContext'
 
 interface AuthModalProps {
   onClose: () => void
+  initialMode?: 'login' | 'signup'
 }
 
-export function AuthModal({ onClose }: AuthModalProps) {
+export function AuthModal({ onClose, initialMode = 'login' }: AuthModalProps) {
   const { login, signup, loginWithGoogle, configured } = useAuth()
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [mode, setMode] = useState<'login' | 'signup'>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showWebViewHelp, setShowWebViewHelp] = useState(isInAppBrowser())
+  const [copied, setCopied] = useState(false)
 
   if (!configured) {
     return (
@@ -57,15 +64,68 @@ export function AuthModal({ onClose }: AuthModalProps) {
 
   const handleGoogle = async () => {
     setError(null)
+    setShowWebViewHelp(false)
     setLoading(true)
     try {
       await loginWithGoogle()
       onClose()
     } catch (err: any) {
-      setError(err?.message || 'Google sign-in failed')
+      const isWebViewBlock =
+        err?.message?.includes('disallowed_useragent') ||
+        err?.code === 'auth/popup-blocked' ||
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.message?.includes('popup') ||
+        err?.message?.includes('Cross-Origin-Opener-Policy')
+
+      if (isWebViewBlock) {
+        // Show the escape hatch UI instead of a plain error
+        setShowWebViewHelp(true)
+        setError(null)
+      } else {
+        setError(err?.message || 'Google sign-in failed')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = window.location.href
+      textArea.style.position = 'fixed'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }
+  }
+
+  const handleOpenInBrowser = () => {
+    const url = window.location.href
+    // Android: intent:// scheme to launch system browser
+    if (/android/i.test(navigator.userAgent)) {
+      window.location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`
+      return
+    }
+    // iOS: try x-safari-https scheme, fall back to window.open
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      // This opens Safari on iOS if available
+      window.location.href = `x-safari-${url}`
+      // Fallback after a short delay if scheme didn't work
+      setTimeout(() => window.open(url, '_blank'), 300)
+      return
+    }
+    window.open(url, '_blank')
   }
 
   return (
@@ -82,7 +142,7 @@ export function AuthModal({ onClose }: AuthModalProps) {
             : 'Join Saraswati to save your papers'}
         </p>
 
-        {/* Google sign-in */}
+        {/* Google sign-in — always visible */}
         <button className="auth-google-btn" onClick={handleGoogle} disabled={loading}>
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -93,11 +153,39 @@ export function AuthModal({ onClose }: AuthModalProps) {
           Continue with Google
         </button>
 
+        {/* WebView help — shown only AFTER Google sign-in fails */}
+        {showWebViewHelp && (
+          <div className="auth-webview-help">
+            <div className="auth-inapp-warning">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>
+                Google sign-in is blocked in this browser. Open the link in <strong>Safari</strong> or <strong>Chrome</strong> to use Google, or sign in with email below.
+              </span>
+            </div>
+            <div className="auth-inapp-actions">
+              <button className="auth-open-browser-btn" onClick={handleOpenInBrowser}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Open in Safari / Chrome
+              </button>
+              <button className="auth-copy-url-btn" onClick={handleCopyUrl}>
+                {copied ? '✓ Copied!' : 'Copy Link'}
+              </button>
+            </div>
+            <p className="auth-webview-tip">
+              💡 Tip: Tap <strong>⋯</strong> in the toolbar above → <strong>Open in Safari</strong>
+            </p>
+          </div>
+        )}
+
         <div className="auth-divider">
           <span>or</span>
         </div>
 
-        {/* Email form */}
+        {/* Email form — always available */}
         <form onSubmit={handleSubmit} className="auth-form">
           <input
             type="email"

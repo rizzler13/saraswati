@@ -38,9 +38,16 @@ interface ContentBlock {
   [key: string]: any
 }
 
+function cleanFigureTitle(title: string | undefined): string {
+  if (!title) return '';
+  const cleanPattern = /^(?:figure|fig)\.?\s*\d+\s*[:\-–—]?\s*/i;
+  return title.replace(cleanPattern, '').trim();
+}
+
 interface DeepDiveProps {
   data: DeepDiveData
   onBack?: () => void
+  onRegenerate?: () => void
 }
 
 /* Render a single content block */
@@ -205,7 +212,7 @@ function BlockRenderer({ block }: { block: ContentBlock }) {
 }
 
 
-export function DeepDive({ data, onBack }: DeepDiveProps) {
+export function DeepDive({ data, onBack, onRegenerate }: DeepDiveProps) {
   const [citationsOpen, setCitationsOpen] = useState(false)
 
   const genTime = data.generation_time_s
@@ -260,18 +267,86 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
                     .map(el => (el as HTMLLinkElement).href)
                     .filter(href => href.includes('fonts.googleapis.com'))
                     .map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
-                  printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+                   printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
                     <title>${data.title} — Saraswati</title>${fontLinks}${styles}
                     <style>
                       body { margin:0; padding:0; background:#fff; }
-                      .dd { position:static!important; overflow:visible!important; max-width:100%!important; }
-                      .btn, button, .dd-gen-time, .dd-back-btn { display:none!important; }
+                      .dd {
+                        position: relative !important;
+                        height: auto !important;
+                        min-height: auto !important;
+                        overflow: visible !important;
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        max-width: 100% !important;
+                      }
+                      .dd-body {
+                        max-width: 100% !important;
+                        width: 100% !important;
+                        padding: 20px 0 !important;
+                        margin: 0 !important;
+                      }
+                      .btn, button, .dd-gen-time, .dd-back-btn, .dd-citations-toggle { display:none!important; }
+                      .dd-citations-print-title { display: block !important; margin-bottom: 16px; font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: 8px; }
+                      .dd-citations-list { display: block !important; }
                       * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+                      
+                      /* Block-level layout overrides for clean page breaking */
+                      .dd-chapter-content {
+                        display: block !important;
+                      }
+                      .dd-chapter-content > * {
+                        margin-bottom: 24px !important;
+                      }
+                      
+                      .dd-figures-layout {
+                        display: block !important;
+                      }
+                      .dd-figures-layout .dd-figure-card {
+                        margin-bottom: 24px !important;
+                      }
+
+                      .dd-figures-grid {
+                        display: block !important;
+                      }
+                      .dd-figures-grid .dd-figure {
+                        display: block !important;
+                        max-width: 100% !important;
+                        margin: 0 auto 24px !important;
+                      }
+                      
+                      /* Avoid orphaned titles */
+                      .dd-chapter-header {
+                        break-after: avoid !important;
+                        page-break-after: avoid !important;
+                      }
+
+                      /* Avoid page breaks inside logical cards/visualizations */
+                      .dd-figure-card,
+                      .dd-figure,
+                      .dd-callout,
+                      .dd-equation-block,
+                      .dd-comparison,
+                      .dd-comparison-col,
+                      .dd-step,
+                      .dd-benchmark,
+                      .dd-mermaid-wrapper {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                      }
+
+                      /* Page break before major sections */
+                      .dd-figures-section,
+                      .dd-citations-section {
+                        page-break-before: always !important;
+                        break-before: page !important;
+                      }
+
                       @media print {
-                        .dd { position:static!important; }
+                        .dd { position: relative !important; }
                         .dd-masthead { background:#0c0c0c!important; color:#fff!important; }
                         .dd-callout { background:#111!important; }
-                        @page { size:A4; margin:1.5cm 1cm; }
+                        @page { size: A4; margin: 1.6cm 1.2cm !important; }
                       }
                     </style></head><body>${article.outerHTML}</body></html>`)
                   printWindow.document.close()
@@ -279,6 +354,14 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
                 }}
               >
                 Save as PDF
+              </button>
+            )}
+            {onRegenerate && (
+              <button
+                className="btn btn-outline"
+                onClick={onRegenerate}
+              >
+                Regenerate
               </button>
             )}
           </div>
@@ -307,7 +390,7 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
 
         {/* EXTRACTED FIGURES */}
         {Array.isArray(data.figures) && data.figures.length > 0 && (
-          <section className="dd-chapter">
+          <section className="dd-chapter dd-figures-section">
             <div className="dd-chapter-header">
               <span className="dd-chapter-num">FIG</span>
               <h2 className="dd-chapter-title">Extracted Figures</h2>
@@ -315,13 +398,18 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
             {data.figures.some(fig => fig.explanation) ? (
               <div className="dd-figures-layout">
                 {data.figures.map((fig, i) => (
-                  <div key={i} className="dd-figure-card">
+                  <div
+                    key={i}
+                    className="dd-figure-card"
+                    onClick={() => window.open(`https://arxiv.org/pdf/${data.paper_id}#page=${fig.page}`, '_blank')}
+                    title={`Click to view Page ${fig.page} in the PDF`}
+                  >
                     <div className="dd-figure-image-wrap">
                       {fig?.data && <img src={fig.data} alt={fig?.title || `Figure from page ${fig.page}`} className="dd-figure-img" />}
                       <div className="dd-figure-page-tag">Page {fig?.page}</div>
                     </div>
                     <div className="dd-figure-info">
-                      <h3 className="dd-figure-title">{fig?.title || `Figure ${i + 1}`}</h3>
+                      <h3 className="dd-figure-title">{cleanFigureTitle(fig?.title) || `Visual (Page ${fig.page})`}</h3>
                       {fig?.explanation && (
                         <p className="dd-figure-explanation">
                           <MixedMathRenderer text={fig.explanation} />
@@ -334,13 +422,18 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
             ) : (
               <div className="dd-figures-grid">
                 {data.figures.map((fig, i) => (
-                  <figure key={i} className="dd-figure">
-                    <div style={{ position: 'relative' }}>
+                  <figure
+                    key={i}
+                    className="dd-figure"
+                    onClick={() => window.open(`https://arxiv.org/pdf/${data.paper_id}#page=${fig.page}`, '_blank')}
+                    title={`Click to view Page ${fig.page} in the PDF`}
+                  >
+                    <div className="dd-figure-image-wrap">
                       {fig?.data && <img src={fig.data} alt={`Figure ${i + 1} from page ${fig.page}`} className="dd-figure-img" />}
                       <div className="dd-figure-page-tag">Page {fig?.page}</div>
                     </div>
                     <figcaption className="dd-figure-caption">
-                      {fig?.title || `Figure ${i + 1}`}
+                      {cleanFigureTitle(fig?.title) || `Visual (Page ${fig.page})`}
                     </figcaption>
                   </figure>
                 ))}
@@ -352,6 +445,7 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
         {/* CITATIONS — collapsible */}
         {Array.isArray(data.citations) && data.citations.length > 0 && (
           <section className="dd-citations-section">
+            <h2 className="dd-citations-print-title">References</h2>
             <button
               className="dd-citations-toggle"
               onClick={() => setCitationsOpen(!citationsOpen)}
@@ -363,15 +457,13 @@ export function DeepDive({ data, onBack }: DeepDiveProps) {
                 ▼
               </span>
             </button>
-            {citationsOpen && (
-              <ol className="dd-citations-list">
-                {data.citations.map((cite, i) => (
-                  <li key={i} className="dd-citation-item">
-                    <MixedMathRenderer text={cite} />
-                  </li>
-                ))}
-              </ol>
-            )}
+            <ol className={`dd-citations-list ${citationsOpen ? 'open' : ''}`}>
+              {data.citations.map((cite, i) => (
+                <li key={i} className="dd-citation-item">
+                  <MixedMathRenderer text={cite} />
+                </li>
+              ))}
+            </ol>
           </section>
         )}
       </div>

@@ -9,12 +9,16 @@ import { API_BASE_URL } from '../config'
 import { useAuth, type ChatMessage } from './auth/AuthContext'
 import type { Paper } from '../App'
 
-export function AgentChat() {
+interface AgentChatProps {
+  attachedPaper: Paper | null
+  setAttachedPaper: (paper: Paper | null) => void
+}
+
+export function AgentChat({ attachedPaper, setAttachedPaper }: AgentChatProps) {
   const { chats, saveChatMessage, saveAttachedPaper } = useAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [attachedPaper, setAttachedPaper] = useState<Paper | null>(null)
   
   // Search Modal state
   const [showSearch, setShowSearch] = useState(false)
@@ -32,14 +36,16 @@ export function AgentChat() {
     }
   }, [messages])
 
-  // Load global chat history from context on mount
+  // Load chat history from context when attachedPaper changes or chats update
   useEffect(() => {
-    const matchingChat = chats.find(c => c.paperId === 'global')
+    const activeId = attachedPaper ? attachedPaper.id : 'global'
+    const matchingChat = chats.find(c => c.paperId === activeId)
     if (matchingChat) {
       setMessages(matchingChat.messages || [])
-      setAttachedPaper(matchingChat.attachedPaper || null)
+    } else {
+      setMessages([])
     }
-  }, [chats])
+  }, [attachedPaper, chats])
 
   // Search papers on arXiv
   const doSearch = useCallback(async (q: string) => {
@@ -83,8 +89,11 @@ export function AgentChat() {
     setInput('')
     setIsLoading(true)
 
+    const activeId = attachedPaper ? attachedPaper.id : 'global'
+    const activeTitle = attachedPaper ? attachedPaper.title : 'Global Session'
+
     // Save user message to parent document
-    saveChatMessage('global', 'Global Session', updatedMessages, attachedPaper)
+    saveChatMessage(activeId, activeTitle, updatedMessages, attachedPaper)
 
     try {
       const resp = await fetch(`${API_BASE_URL}/api/research`, {
@@ -92,8 +101,8 @@ export function AgentChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: queryStr,
-          paper_id: attachedPaper ? attachedPaper.id : 'global',
-          paper_title: attachedPaper ? attachedPaper.title : 'Global Session',
+          paper_id: activeId,
+          paper_title: activeTitle,
           paper_abstract: attachedPaper ? attachedPaper.abstract : 'General scientific inquiries.',
           history: updatedMessages.slice(-6).map(m => ({ role: m.role, content: m.content })),
         }),
@@ -112,7 +121,7 @@ export function AgentChat() {
       setMessages(finalMessages)
 
       // Save assistant response to parent document
-      saveChatMessage('global', 'Global Session', finalMessages)
+      saveChatMessage(activeId, activeTitle, finalMessages, attachedPaper)
     } catch (e: any) {
       const errorMsg: ChatMessage = {
         role: 'assistant',
@@ -123,7 +132,7 @@ export function AgentChat() {
       const finalMessages = [...updatedMessages, errorMsg]
       setMessages(finalMessages)
       
-      saveChatMessage('global', 'Global Session', finalMessages)
+      saveChatMessage(activeId, activeTitle, finalMessages, attachedPaper)
     } finally {
       setIsLoading(false)
     }
@@ -140,7 +149,9 @@ export function AgentChat() {
   const clearChat = async () => {
     if (!window.confirm('Clear conversation history?')) return
     setMessages([])
-    saveChatMessage('global', 'Global Session', [])
+    const activeId = attachedPaper ? attachedPaper.id : 'global'
+    const activeTitle = attachedPaper ? attachedPaper.title : 'Global Session'
+    saveChatMessage(activeId, activeTitle, [], attachedPaper)
   }
 
 
@@ -193,7 +204,6 @@ export function AgentChat() {
               <button 
                 onClick={() => {
                   setAttachedPaper(null)
-                  saveAttachedPaper('global', null)
                 }}
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 14, cursor: 'pointer', padding: 0 }}
                 title="Detach Paper"
@@ -321,21 +331,34 @@ export function AgentChat() {
               Attach Paper context from arXiv
             </h2>
             
-            {/* Search Input */}
-            <div style={{ position: 'relative', marginBottom: 20 }}>
+            {/* Search Input — Premium styled */}
+            <div className="premium-search-bar" style={{ marginBottom: 20 }}>
+              <div className="premium-search-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
               <input
                 type="text"
+                className="premium-search-input"
                 placeholder="Search by title, keyword, or exact arXiv ID (e.g. 1706.03762)..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%', padding: '10px 14px', border: '1px solid var(--border)',
-                  borderRadius: 8, fontSize: 14, outline: 'none'
-                }}
                 autoFocus
               />
+              {searchQuery && (
+                <button
+                  className="premium-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                  style={{ marginRight: isSearching ? 24 : 0 }}
+                >
+                  &times;
+                </button>
+              )}
               {isSearching && (
-                <div className="loading-spinner" style={{ width: 16, height: 16, position: 'absolute', right: 14, top: 12 }} />
+                <div className="loading-spinner" style={{ width: 16, height: 16, position: 'absolute', right: 14, top: 10 }} />
               )}
             </div>
 
@@ -349,7 +372,7 @@ export function AgentChat() {
                     setShowSearch(false)
                     setSearchQuery('')
                     setSearchResults([])
-                    saveAttachedPaper('global', paper)
+                    saveAttachedPaper(paper.id, paper)
                   }}
                   style={{
                     padding: 12, border: '1px solid var(--border-light)', borderRadius: 6,

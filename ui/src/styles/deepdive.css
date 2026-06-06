@@ -3,7 +3,7 @@
    ============================================================ */
 
 /* --- CSS Variables --- */
-.dd {
+:root {
   --dd-font-sans: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
   --dd-font-serif: 'Georgia', 'Times New Roman', serif;
   --dd-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
@@ -15,7 +15,40 @@
   --dd-callout-bg: #0f0f0f;
   --dd-callout-text: #e0e0e0;
   --dd-masthead-bg: #0c0c0c;
-  --dd-max-width: 780px;
+  --dd-max-width: 1100px;
+  
+  /* Theme elements variables */
+  --dd-equation-bg: #f5f3ef;
+  --dd-comparison-left-bg: #fef6f4;
+  --dd-comparison-right-bg: #f3f8f4;
+  --dd-pullquote-color: #333;
+  --dd-figure-wrap-bg: #fafafa;
+  --dd-figure-wrap-border: #f0f0f0;
+  --dd-figure-explanation-color: #555;
+  --dd-citations-hover: #f5f3ef;
+  --dd-mermaid-bg: #f5f3ef;
+  --dd-mermaid-border: #cbd5e1;
+}
+
+[data-theme="dark"] {
+  --dd-bg: #0b0c0d;
+  --dd-text: #f3f4f6;
+  --dd-text-muted: #9ca3af;
+  --dd-border: #242628;
+  --dd-callout-bg: #1c1d1f;
+  --dd-callout-text: #e5e7eb;
+  
+  /* Dark Mode Overrides */
+  --dd-equation-bg: #1c1d1f;
+  --dd-comparison-left-bg: #2a1916;
+  --dd-comparison-right-bg: #162a1c;
+  --dd-pullquote-color: #e5e7eb;
+  --dd-figure-wrap-bg: #121315;
+  --dd-figure-wrap-border: #242628;
+  --dd-figure-explanation-color: #9ca3af;
+  --dd-citations-hover: #1c1d1f;
+  --dd-mermaid-bg: #121315;
+  --dd-mermaid-border: #242628;
 }
 
 /* --- Article container --- */
@@ -155,16 +188,23 @@
 
 /* --- Chapter --- */
 .dd-chapter {
-  margin-bottom: 56px;
+  max-width: 100%;
+  margin: 0 0 56px 0;
+  width: 100%;
 }
 
 .dd-chapter-header {
   display: flex;
   align-items: baseline;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   border-bottom: 2px solid var(--dd-text);
   padding-bottom: 10px;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .dd-chapter-num {
@@ -190,14 +230,16 @@
   font-size: 18px;
   line-height: 1.65;
   color: var(--dd-text-muted);
-  margin: 0 0 24px;
+  margin: 0 0 24px 0;
+  max-width: 800px;
   font-style: italic;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .dd-chapter-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  display: block;
+  width: 100%;
 }
 
 /* --- Prose --- */
@@ -205,8 +247,14 @@
   font-size: 17px;
   line-height: 1.75;
   color: var(--dd-text);
+  max-width: 800px;
+  margin: 0 0 20px 0;
+  width: 100%;
+  box-sizing: border-box;
 }
-.dd-prose p { margin: 0 0 12px; }
+.dd-prose p {
+  margin: 0 0 12px;
+}
 
 /* --- Pullquote --- */
 .dd-pullquote {
@@ -216,7 +264,10 @@
   font-size: 22px;
   line-height: 1.5;
   font-style: italic;
-  color: #333;
+  color: var(--dd-pullquote-color);
+  max-width: 800px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* --- Callout --- */
@@ -225,7 +276,10 @@
   color: var(--dd-callout-text);
   border-radius: 8px;
   padding: 24px 28px;
-  margin: 20px 0;
+  margin: 24px 0;
+  max-width: 800px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .dd-callout-label {
   font-family: var(--dd-font-sans);
@@ -253,11 +307,14 @@
 
 /* --- Equation --- */
 .dd-equation-block {
-  background: #f5f3ef;
+  background: var(--dd-equation-bg);
   border-radius: 8px;
   padding: 24px 28px;
-  margin: 20px 0;
+  margin: 28px 0;
   border: 1px solid var(--dd-border);
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .dd-equation-title {
   font-family: var(--dd-font-sans);
@@ -305,15 +362,18 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin: 20px 0;
+  margin: 28px 0;
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .dd-comparison-col {
   border-radius: 8px;
   padding: 20px;
   border: 1px solid var(--dd-border);
 }
-.dd-comparison-left { background: #fef6f4; }
-.dd-comparison-right { background: #f3f8f4; }
+.dd-comparison-left { background: var(--dd-comparison-left-bg); }
+.dd-comparison-right { background: var(--dd-comparison-right-bg); }
 .dd-comparison-header {
   font-family: var(--dd-font-sans);
   font-size: 12px;
@@ -333,7 +393,10 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin: 20px 0;
+  margin: 24px 0;
+  max-width: 800px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .dd-step {
   display: flex;
@@ -363,8 +426,11 @@
 
 /* --- Benchmark Table --- */
 .dd-benchmark {
-  margin: 20px 0;
+  margin: 28px 0;
   overflow-x: auto;
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .dd-benchmark-title {
   font-family: var(--dd-font-sans);
@@ -417,6 +483,7 @@
   padding: 2px 8px;
   border-radius: 3px;
   background: #eee;
+  color: #333333;
 }
 .dd-bench-sota {
   background: #d4edda;
@@ -425,24 +492,95 @@
 
 /* --- Mermaid --- */
 .dd-mermaid-wrapper {
-  margin: 20px 0;
-  background: #1a1a2e;
-  border-radius: 8px;
-  padding: 20px;
-  overflow-x: auto;
+  margin: 32px 0;
+  background: var(--dd-mermaid-bg);
+  border: 1px solid var(--dd-mermaid-border);
+  border-radius: 12px;
+  padding: 24px;
+  overflow: hidden;
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+
+[data-theme="dark"] .dd-mermaid-wrapper {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.dd-mermaid-wrapper:hover {
+  border-color: rgba(201, 85, 58, 0.4);
+}
+
 .dd-mermaid-title {
   font-family: var(--dd-font-sans);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 12px;
+  color: var(--dd-text-muted);
+  margin-bottom: 16px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+.dd-mermaid-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--dd-accent);
+}
+
+.dd-mermaid-container {
+  max-height: 520px;
+  overflow: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dd-border) transparent;
+}
+
+.dd-mermaid-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dd-mermaid-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dd-mermaid-container::-webkit-scrollbar-thumb {
+  background: var(--dd-border);
+  border-radius: 3px;
+}
+
+.dd-mermaid-container::-webkit-scrollbar-thumb:hover {
+  background: var(--dd-text-muted);
+}
+
 .dd-mermaid-container svg {
   max-width: 100%;
-  height: auto;
+  height: auto !important;
+  display: block;
+  margin: 0 auto;
+}
+
+.dd-mermaid-container svg .node:hover rect,
+.dd-mermaid-container svg .node:hover path,
+.dd-mermaid-container svg .node:hover polygon,
+.dd-mermaid-container svg .node:hover circle,
+.dd-mermaid-container svg .node:hover ellipse {
+  filter: brightness(1.05);
+  stroke: var(--dd-accent) !important;
+  stroke-width: 2px !important;
+  transition: all 0.2s ease;
+}
+
+.dd-body .dd-mermaid-container svg {
+  max-width: 100%;
 }
 .dd-mermaid-error {
   margin: 20px 0;
@@ -460,21 +598,34 @@
 /* --- Figures --- */
 .dd-figures-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
   margin: 20px 0;
 }
 .dd-figure {
-  margin: 0;
+  margin: 28px 0;
   border: 1px solid var(--dd-border);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--dd-bg);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 1000px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.dd-figure:hover {
+  cursor: pointer;
+  border-color: var(--dd-accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 .dd-figure-img {
-  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
+  object-fit: contain;
   display: block;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .dd-figure-caption {
   padding: 8px 12px;
@@ -485,6 +636,9 @@
 }
 
 /* --- Citations (collapsible) --- */
+.dd-citations-print-title {
+  display: none;
+}
 .dd-citations-section {
   margin-top: 40px;
   border-top: 1px solid var(--dd-border);
@@ -507,7 +661,7 @@
   transition: all 0.15s;
 }
 .dd-citations-toggle:hover {
-  background: #f5f3ef;
+  background: var(--dd-citations-hover);
 }
 .dd-citations-label {
   letter-spacing: 0.02em;
@@ -520,9 +674,13 @@
   transform: rotate(180deg);
 }
 .dd-citations-list {
+  display: none;
   margin: 16px 0 0;
   padding: 0 0 0 24px;
   list-style-type: decimal;
+}
+.dd-citations-list.open {
+  display: block;
 }
 .dd-citation-item {
   font-family: var(--dd-font-sans);
@@ -536,17 +694,40 @@
 /* --- Print --- */
 @media print {
   .dd {
-    position: static;
-    z-index: 99999;
-    overflow: visible;
+    position: relative !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    max-width: 100% !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
+  .dd-body {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 20px 0 !important;
+    margin: 0 !important;
+  }
   .dd-back-btn,
   .dd-actions,
-  .dd-gen-time {
+  .dd-gen-time,
+  .dd-citations-toggle {
     display: none !important;
+  }
+  .dd-citations-print-title {
+    display: block !important;
+    margin-bottom: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    border-bottom: 2px solid #000;
+    padding-bottom: 8px;
+  }
+  .dd-citations-list {
+    display: block !important;
   }
   .dd-masthead {
     background: #0c0c0c !important;
@@ -556,9 +737,61 @@
     background: #111 !important;
     color: #e0e0e0 !important;
   }
+  
+  /* Block-level layout overrides for clean page breaking */
+  .dd-chapter-content {
+    display: block !important;
+  }
+  .dd-chapter-content > * {
+    margin-bottom: 24px !important;
+  }
+  
+  .dd-figures-layout {
+    display: block !important;
+  }
+  .dd-figures-layout .dd-figure-card {
+    margin-bottom: 24px !important;
+  }
+
+  .dd-figures-grid {
+    display: block !important;
+  }
+  .dd-figures-grid .dd-figure {
+    display: block !important;
+    max-width: 100% !important;
+    margin: 0 auto 24px !important;
+  }
+  
+  /* Avoid orphaned titles */
+  .dd-chapter-header {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* Avoid page breaks inside logical cards/visualizations */
+  .dd-figure-card,
+  .dd-figure,
+  .dd-callout,
+  .dd-equation-block,
+  .dd-comparison,
+  .dd-comparison-col,
+  .dd-step,
+  .dd-benchmark,
+  .dd-mermaid-wrapper {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page break before major sections */
+  .dd-figures-section,
+  .dd-citations-section {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
   @page {
     size: A4;
-    margin: 1.5cm 1cm;
+    margin: 1.6cm 1.2cm !important;
   }
 }
 
@@ -574,21 +807,29 @@
 
 /* --- Premium Figure Cards --- */
 .dd-figures-layout {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
   gap: 24px;
   margin: 24px 0;
+  max-width: 1000px;
+  width: 100%;
 }
 .dd-figure-card {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) 1fr;
+  grid-template-columns: minmax(160px, 200px) 1fr;
   gap: 24px;
   border: 1px solid var(--dd-border);
   border-radius: 8px;
   overflow: hidden;
-  background: #ffffff;
-  padding: 20px;
+  background: var(--dd-bg);
+  padding: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dd-figure-card:hover {
+  cursor: pointer;
+  border-color: var(--dd-accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 @media (max-width: 768px) {
   .dd-figure-card {
@@ -599,14 +840,14 @@
 }
 .dd-figure-image-wrap {
   position: relative;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--dd-figure-wrap-border);
   border-radius: 6px;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--dd-figure-wrap-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  height: 130px;
 }
 .dd-figure-page-tag {
   position: absolute;
@@ -636,7 +877,12 @@
 .dd-figure-explanation {
   font-family: var(--dd-font-sans);
   font-size: 14px;
-  color: #555;
+  color: var(--dd-figure-explanation-color);
   line-height: 1.5;
   margin: 0;
+}
+
+.dd-figure-card:hover .dd-figure-img,
+.dd-figure:hover .dd-figure-img {
+  transform: scale(1.03);
 }

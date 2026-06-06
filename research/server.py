@@ -24,21 +24,26 @@ from typing import Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Load .env from project root
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-# Set API keys for LiteLLM
-for key in ["GROQ_API_KEY", "OPENROUTER_API_KEY", "CEREBRAS_API_KEY"]:
+# Set API keys for LiteLLM (including alternate keys for rotation)
+for key in [
+    "GROQ_API_KEY", "GROQ_ALT_API_KEY",
+    "OPENROUTER_API_KEY", "OPENROUTER_ALT_API_KEY",
+    "CEREBRAS_API_KEY", "CEREBRAS_ALT_API_KEY", "CEREBRAS_ALT2_API_KEY",
+]:
     val = os.getenv(key)
     if val:
         os.environ[key] = val
 
 from .core.config import ResearchConfig
 from .core.llm import complete
+from .core.chunker import ChunkCache
 from .agents.orchestrator import handle_chat_query
 from .agents.specialized import AgentResult
 from .agents.deep_dive import (
@@ -49,6 +54,7 @@ from .agents.deep_dive import (
 from .sources.papers import (
     get_trending_papers,
     search_arxiv,
+    search_huggingface,
     fetch_huggingface_daily,
     load_cached_papers,
     Paper,
@@ -63,8 +69,11 @@ logger = logging.getLogger("saraswati.server")
 # --- Config ---
 config = ResearchConfig.from_env()
 
+IS_LAMBDA = "AWS_LAMBDA_FUNCTION_NAME" in os.environ
 DB_PATH_ENV = os.getenv("DATABASE_PATH")
-if DB_PATH_ENV:
+if IS_LAMBDA:
+    PERSISTENT_DATA_DIR = Path("/tmp")
+elif DB_PATH_ENV:
     PERSISTENT_DATA_DIR = Path(DB_PATH_ENV).parent
 else:
     PERSISTENT_DATA_DIR = Path(__file__).parent.parent / "data"
@@ -77,6 +86,9 @@ dd_cache = DeepDiveCache(
     cache_dir=str(CACHE_DIR / "deep_dives"),
     ttl=config.deep_dive_cache_ttl,
 )
+
+# Chunk cache (PDF text, chunk summaries, paper digests)
+chunk_cache = ChunkCache(cache_dir=str(CACHE_DIR / "chunker"))
 
 app = FastAPI(
     title="Saraswati Research Engine",
@@ -110,6 +122,7 @@ class DeepDiveRequest(BaseModel):
     authors: list[str] = []
     date: str = ""
     tags: list[str] = []
+    force: bool = False
 
 
 # --- Shared HTTP client ---
@@ -134,13 +147,14 @@ async def startup():
         init_db()
         logger.info("SQLite database initialized successfully.")
         
-        # Trigger background crawl on startup asynchronously
-        client = await get_client()
-        from .sources.papers import get_trending_papers
-        task = asyncio.create_task(get_trending_papers(client))
-        _startup_tasks.add(task)
-        task.add_done_callback(_startup_tasks.discard)
-        logger.info("Triggered initial background papers crawl (strong reference held).")
+        if not IS_LAMBDA:
+            # Trigger background crawl on startup asynchronously
+            client = await get_client()
+            from .sources.papers import get_trending_papers
+            task = asyncio.create_task(get_trending_papers(client))
+            _startup_tasks.add(task)
+            task.add_done_callback(_startup_tasks.discard)
+            logger.info("Triggered initial background papers crawl (strong reference held).")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
@@ -181,7 +195,7 @@ async def papers_trending(page: int = 1, limit: int = 50, category: Optional[str
 
 @app.get("/api/papers/search")
 async def papers_search(q: str = ""):
-    """Search for papers matching query (local DB first, then arXiv API fallback/merge)."""
+    """Search for papers matching query (local DB first, then HF/arXiv API fallbacks/merge)."""
     if not q.strip():
         return []
     
@@ -196,21 +210,31 @@ async def papers_search(q: str = ""):
         logger.error(f"Local database search failed: {e}")
         local_results = []
     
-    # 2. Query arXiv API as fallback with a 2.0s timeout
+    # 2. Query external APIs in parallel (Hugging Face papers search + arXiv search)
     client = await get_client()
-    try:
-        arxiv_papers = await asyncio.wait_for(
-            search_arxiv(client, q.strip(), max_results=20),
-            timeout=2.0
-        )
-        arxiv_dicts = [p.to_dict() for p in arxiv_papers]
-        logger.info(f"arXiv search returned {len(arxiv_dicts)} results for '{q}'")
-    except asyncio.TimeoutError:
-        logger.warning(f"arXiv search fallback timed out for '{q}'")
-        arxiv_dicts = []
-    except Exception as e:
-        logger.warning(f"arXiv search fallback failed for '{q}': {e}")
-        arxiv_dicts = []
+    
+    async def fetch_hf():
+        try:
+            return await search_huggingface(client, q.strip())
+        except Exception as e:
+            logger.warning(f"HuggingFace search failed: {e}")
+            return []
+            
+    async def fetch_arxiv():
+        try:
+            arxiv_papers = await asyncio.wait_for(
+                search_arxiv(client, q.strip(), max_results=20),
+                timeout=3.5
+            )
+            return [p.to_dict() for p in arxiv_papers]
+        except Exception as e:
+            logger.warning(f"arXiv search fallback failed or timed out: {e}")
+            return []
+            
+    hf_papers, arxiv_papers = await asyncio.gather(
+        fetch_hf(),
+        fetch_arxiv()
+    )
         
     # 3. Merge and deduplicate
     seen_ids = set()
@@ -222,12 +246,21 @@ async def papers_search(q: str = ""):
             seen_ids.add(p_id)
             merged.append(p)
             
-    for p in arxiv_dicts:
+    for p in hf_papers:
+        p_id = p.to_dict().get("id") if isinstance(p, Paper) else p.get("id")
+        if p_id and p_id not in seen_ids:
+            seen_ids.add(p_id)
+            merged.append(p.to_dict() if isinstance(p, Paper) else p)
+            
+    for p in arxiv_papers:
         p_id = p.get("id")
         if p_id and p_id not in seen_ids:
             seen_ids.add(p_id)
             merged.append(p)
             
+    # 4. Sort by popularity (score DESC)
+    merged.sort(key=lambda x: x.get("score", 0), reverse=True)
+
     logger.info(f"Merged search results for '{q}': {len(merged)} total papers")
     return merged
 
@@ -244,12 +277,24 @@ async def papers_daily():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def generate_thumbnail_task(paper_id: str, thumb_path: Path):
+async def generate_thumbnail_task(paper_id: str, thumb_path: Path, s3_bucket: Optional[str] = None):
     """Background task to fetch PDF and render thumbnail without blocking event loop."""
     import base64
     from .parsing.pdf_parser import render_first_page_thumbnail
 
-    if thumb_path.exists():
+    safe_id = paper_id.replace("/", "_").replace(".", "_")
+    
+    # If S3 is enabled, check S3 first
+    if s3_bucket:
+        try:
+            import boto3
+            s3_client = boto3.client("s3")
+            s3_key = f"thumbnails/{safe_id}.png"
+            s3_client.head_object(Bucket=s3_bucket, Key=s3_key)
+            return  # Already exists in S3
+        except Exception:
+            pass
+    elif thumb_path.exists():
         return
 
     logger.info(f"Asynchronously downloading PDF and generating thumbnail for {paper_id}...")
@@ -267,9 +312,22 @@ async def generate_thumbnail_task(paper_id: str, thumb_path: Path):
                 if data_uri and data_uri.startswith("data:image/png;base64,"):
                     b64_data = data_uri.split(",")[1]
                     img_bytes = base64.b64decode(b64_data)
-                    thumb_path.parent.mkdir(parents=True, exist_ok=True)
-                    thumb_path.write_bytes(img_bytes)
-                    logger.info(f"Successfully generated thumbnail for {paper_id}")
+                    
+                    if s3_bucket:
+                        import boto3
+                        s3_client = boto3.client("s3")
+                        s3_key = f"thumbnails/{safe_id}.png"
+                        s3_client.put_object(
+                            Bucket=s3_bucket,
+                            Key=s3_key,
+                            Body=img_bytes,
+                            ContentType="image/png"
+                        )
+                        logger.info(f"Successfully uploaded thumbnail for {paper_id} to S3")
+                    else:
+                        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+                        thumb_path.write_bytes(img_bytes)
+                        logger.info(f"Successfully generated thumbnail for {paper_id}")
                     return
             logger.warning(f"Failed to fetch PDF for thumbnail: arXiv returned {resp.status_code}")
     except Exception as e:
@@ -279,26 +337,58 @@ async def generate_thumbnail_task(paper_id: str, thumb_path: Path):
 @app.get("/api/papers/thumbnail/{paper_id:path}")
 async def papers_thumbnail(paper_id: str, background_tasks: BackgroundTasks):
     """Get first page thumbnail of a paper as PNG."""
-    from fastapi.responses import Response
+    from fastapi.responses import Response, RedirectResponse, JSONResponse
     paper_id = paper_id.strip()
     if not paper_id:
         raise HTTPException(status_code=400, detail="Invalid paper ID")
 
-    # Check cache first
-    thumb_cache_dir = CACHE_DIR / "thumbnails"
-    thumb_cache_dir.mkdir(parents=True, exist_ok=True)
     safe_id = paper_id.replace("/", "_").replace(".", "_")
-    thumb_path = thumb_cache_dir / f"{safe_id}.png"
+    s3_bucket = os.getenv("S3_BUCKET_NAME")
+    
+    if s3_bucket:
+        import boto3
+        s3_client = boto3.client("s3")
+        s3_key = f"thumbnails/{safe_id}.png"
+        try:
+            # Check if exists in S3
+            s3_client.head_object(Bucket=s3_bucket, Key=s3_key)
+            # Generate pre-signed URL (valid for 1 hour)
+            url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": s3_bucket, "Key": s3_key},
+                ExpiresIn=3600
+            )
+            return RedirectResponse(url=url)
+        except Exception:
+            # Doesn't exist in S3. If running on Lambda, generate synchronously to ensure completion
+            IS_LAMBDA = os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
+            if IS_LAMBDA:
+                await generate_thumbnail_task(paper_id, None, s3_bucket=s3_bucket)
+                try:
+                    # Retry getting the URL after synchronous creation
+                    url = s3_client.generate_presigned_url(
+                        "get_object",
+                        Params={"Bucket": s3_bucket, "Key": s3_key},
+                        ExpiresIn=3600
+                    )
+                    return RedirectResponse(url=url)
+                except Exception:
+                    pass
+            else:
+                background_tasks.add_task(generate_thumbnail_task, paper_id, None, s3_bucket=s3_bucket)
+    else:
+        # Check local cache first
+        thumb_cache_dir = CACHE_DIR / "thumbnails"
+        thumb_cache_dir.mkdir(parents=True, exist_ok=True)
+        thumb_path = thumb_cache_dir / f"{safe_id}.png"
 
-    if thumb_path.exists():
-        return Response(content=thumb_path.read_bytes(), media_type="image/png")
+        if thumb_path.exists():
+            return Response(content=thumb_path.read_bytes(), media_type="image/png")
 
-    # Queue background generation task
-    background_tasks.add_task(generate_thumbnail_task, paper_id, thumb_path)
+        # Queue background generation task locally
+        background_tasks.add_task(generate_thumbnail_task, paper_id, thumb_path)
 
     # Immediately return 404 to let frontend fall back to CSS placeholder instantly
-    # Using JSONResponse ensures FastAPI runs the queued background tasks
-    from fastapi.responses import JSONResponse
     return JSONResponse(status_code=404, content={"detail": "Thumbnail generating in background"})
 
 
@@ -341,6 +431,52 @@ async def research(req: ResearchRequest):
 _generating: dict[str, bool] = {}
 
 
+async def run_deep_dive_generation_sync(
+    paper_id: str,
+    title: str,
+    abstract: str,
+    authors: list[str],
+    date: str,
+    tags: list[str],
+):
+    """Worker task that runs the actual LLM generation of a deep-dive and caches it."""
+    client = await get_client()
+    try:
+        _generating[paper_id] = True
+        logger.info(f"Generating deep dive for {paper_id} in background task...")
+        result = await generate_deep_dive(
+            paper_id=paper_id,
+            paper_title=title,
+            paper_abstract=abstract,
+            paper_authors=authors,
+            paper_date=date,
+            paper_tags=tags,
+            config=config,
+            client=client,
+            cache=dd_cache,
+            chunk_cache=chunk_cache,
+        )
+        logger.info(f"Successfully generated deep dive for {paper_id} in background task.")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to generate deep dive for {paper_id} in background task: {e}")
+        # Remove placeholder from cache so the user doesn't get stuck with a stale placeholder
+        try:
+            key_name = dd_cache._key(paper_id)
+            if dd_cache.s3:
+                s3_key = f"deep_dives/{key_name}"
+                dd_cache.s3.delete_object(Bucket=dd_cache.bucket_name, Key=s3_key)
+            else:
+                path = dd_cache.cache_dir / key_name
+                if path.exists():
+                    path.unlink()
+            logger.info(f"Cleared placeholder for {paper_id} due to generation failure.")
+        except Exception as err:
+            logger.error(f"Failed to clear placeholder for {paper_id}: {err}")
+    finally:
+        _generating.pop(paper_id, None)
+
+
 @app.post("/api/deep-dive/generate")
 async def deep_dive_generate(req: DeepDiveRequest, background_tasks: BackgroundTasks):
     """Generate a deep-dive article for a paper."""
@@ -348,12 +484,40 @@ async def deep_dive_generate(req: DeepDiveRequest, background_tasks: BackgroundT
     if not paper_id:
         raise HTTPException(status_code=400, detail="paper_id is required")
 
+    # If force, clear cache first
+    if req.force:
+        logger.info(f"Force regeneration requested for {paper_id}. Clearing cache...")
+        try:
+            key_name = dd_cache._key(paper_id)
+            if dd_cache.s3:
+                s3_key = f"deep_dives/{key_name}"
+                dd_cache.s3.delete_object(Bucket=dd_cache.bucket_name, Key=s3_key)
+            else:
+                path = dd_cache.cache_dir / key_name
+                if path.exists():
+                    path.unlink()
+            logger.info(f"Cleared cache for {paper_id}")
+        except Exception as e:
+            logger.error(f"Failed to clear cache for {paper_id}: {e}")
+
     # Check cache first
     cached = dd_cache.get(paper_id)
     if cached:
-        return cached.to_dict()
+        if cached.status == "generating":
+            age = time.time() - cached.generated_at
+            if age < 300:  # 5 minutes threshold for stale placeholders
+                return {
+                    "paper_id": paper_id,
+                    "title": req.title,
+                    "status": "generating",
+                    "message": "Deep dive is being generated. Please check back shortly.",
+                }
+            else:
+                logger.warning(f"Found stale generating placeholder for {paper_id} (age={age:.1f}s). Re-generating...")
+        else:
+            return cached.to_dict()
 
-    # Check if already generating
+    # Check if already generating locally
     if paper_id in _generating:
         return {
             "paper_id": paper_id,
@@ -362,27 +526,68 @@ async def deep_dive_generate(req: DeepDiveRequest, background_tasks: BackgroundT
             "message": "Deep dive is being generated. Please check back shortly.",
         }
 
-    # Generate synchronously (user is waiting)
-    client = await get_client()
-    try:
-        _generating[paper_id] = True
-        result = await generate_deep_dive(
+    # Put a placeholder in cache to mark as generating (shared across Lambda instances via S3/Disk)
+    placeholder = DeepDiveResult(
+        paper_id=paper_id,
+        title=req.title,
+        status="generating",
+        generated_at=time.time(),
+        abstract=req.abstract,
+        authors=req.authors,
+        date=req.date,
+        tags=req.tags,
+    )
+    dd_cache.put(placeholder)
+
+    # Launch task asynchronously
+    if IS_LAMBDA:
+        func_name = os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        if func_name:
+            try:
+                import boto3
+                lambda_client = boto3.client("lambda")
+                payload = {
+                    "action": "generate_deep_dive",
+                    "paper_id": paper_id,
+                    "title": req.title,
+                    "abstract": req.abstract,
+                    "authors": req.authors,
+                    "date": req.date,
+                    "tags": req.tags,
+                }
+                logger.info(f"Invoking background Lambda function '{func_name}' for paper {paper_id}")
+                lambda_client.invoke(
+                    FunctionName=func_name,
+                    InvocationType="Event",  # Asynchronous execution
+                    Payload=json.dumps(payload),
+                )
+                return {
+                    "paper_id": paper_id,
+                    "title": req.title,
+                    "status": "generating",
+                    "message": "Deep dive is being generated in the background.",
+                }
+            except Exception as e:
+                logger.error(f"Failed to invoke Lambda asynchronously for {paper_id}: {e}. Falling back to background task.")
+    
+    # Fallback to asyncio.create_task (works locally / non-serverless)
+    logger.info(f"Scheduling generation for {paper_id} as a local background task on the asyncio event loop.")
+    asyncio.create_task(
+        run_deep_dive_generation_sync(
             paper_id=paper_id,
-            paper_title=req.title,
-            paper_abstract=req.abstract,
-            paper_authors=req.authors,
-            paper_date=req.date,
-            paper_tags=req.tags,
-            config=config,
-            client=client,
-            cache=dd_cache,
+            title=req.title,
+            abstract=req.abstract,
+            authors=req.authors,
+            date=req.date,
+            tags=req.tags,
         )
-        return result.to_dict()
-    except Exception as e:
-        logger.error(f"Deep dive generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        _generating.pop(paper_id, None)
+    )
+    return {
+        "paper_id": paper_id,
+        "title": req.title,
+        "status": "generating",
+        "message": "Deep dive is being generated.",
+    }
 
 
 @app.get("/api/deep-dive/available")
@@ -511,8 +716,12 @@ async def graph():
 # ===================================================================
 
 @app.get("/api/admin/trigger_crawl")
-async def trigger_crawl():
+async def trigger_crawl(x_admin_token: Optional[str] = Header(None)):
     """Manually trigger the papers crawl and return the result synchronously for debugging."""
+    admin_token = os.getenv("ADMIN_TOKEN")
+    if admin_token and x_admin_token != admin_token:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid or missing admin token")
+
     client = await get_client()
     try:
         logger.info("Manually triggering papers crawl via admin endpoint...")

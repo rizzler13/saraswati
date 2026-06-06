@@ -24,6 +24,7 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
   const [availableDives, setAvailableDives] = useState<{ paper_id: string; title: string; generated_at: number; status: string }[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generatedPaperIdRef = useRef<string | null>(null)
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch available deep dives
   const fetchAvailable = useCallback(async () => {
@@ -41,6 +42,15 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
   useEffect(() => {
     fetchAvailable()
   }, [fetchAvailable, deepDiveData])
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
 
   // Live search with debounce
   const doSearch = useCallback(async (q: string) => {
@@ -73,6 +83,39 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [searchQuery, doSearch])
 
+  // Polling logic for deep-dive generation
+  const pollDeepDive = useCallback((paperId: string) => {
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+    let attempts = 0
+    const maxAttempts = 60 // 60 attempts * 3s = 180s (3 minutes)
+
+    pollingIntervalRef.current = setInterval(async () => {
+      attempts++
+      if (attempts > maxAttempts) {
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+        setError('Generation timed out. Please try again.')
+        setIsGenerating(false)
+        return
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/deep-dive/${encodeURIComponent(paperId)}`)
+        if (resp.ok) {
+          const data = await resp.json()
+          // Check if data is complete
+          if (data.chapters && data.chapters.length > 0 && data.status !== 'generating') {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+            setDeepDiveData(data)
+            setIsGenerating(false)
+            fetchAvailable() // Refresh library
+          }
+        }
+      } catch (e) {
+        console.error('Polling failed:', e)
+      }
+    }, 3000)
+  }, [fetchAvailable])
+
   // Generate deep dive
   const generateDeepDive = async (paper: Paper) => {
     if (paper && paper.id) {
@@ -80,6 +123,7 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
       saveDeepDiveRecord(paper.id, paper.title)
     }
 
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
     setGeneratingPaper(paper)
     setIsGenerating(true)
     setError(null)
@@ -100,16 +144,67 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
       })
       if (!resp.ok) throw new Error(`Server error ${resp.status}`)
       const data = await resp.json()
-      if (data.chapters && data.chapters.length > 0) {
+      
+      if (data.chapters && data.chapters.length > 0 && data.status !== 'generating') {
         setDeepDiveData(data)
+        setIsGenerating(false)
       } else if (data.status === 'generating') {
-        setError('Deep dive is being generated. Please try again in a minute.')
+        pollDeepDive(paper.id)
       } else {
         setError('No content generated. Check backend logs.')
+        setIsGenerating(false)
       }
     } catch (e: any) {
       setError(e.message || 'Failed to generate deep dive')
-    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const regenerateDeepDive = async () => {
+    if (!deepDiveData) return
+    const paper = {
+      id: deepDiveData.paper_id,
+      title: deepDiveData.title,
+      abstract: deepDiveData.abstract || '',
+      authors: deepDiveData.authors || [],
+      date: deepDiveData.date || '',
+      tags: deepDiveData.tags || [],
+    }
+
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+    setGeneratingPaper(paper as Paper)
+    setIsGenerating(true)
+    setError(null)
+    setDeepDiveData(null)
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/deep-dive/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paper_id: paper.id,
+          title: paper.title,
+          abstract: paper.abstract,
+          authors: paper.authors,
+          date: paper.date,
+          tags: paper.tags,
+          force: true,
+        }),
+      })
+      if (!resp.ok) throw new Error(`Server error ${resp.status}`)
+      const data = await resp.json()
+      
+      if (data.chapters && data.chapters.length > 0 && data.status !== 'generating') {
+        setDeepDiveData(data)
+        setIsGenerating(false)
+      } else if (data.status === 'generating') {
+        pollDeepDive(paper.id)
+      } else {
+        setError('No content generated. Check backend logs.')
+        setIsGenerating(false)
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to regenerate deep dive')
       setIsGenerating(false)
     }
   }
@@ -139,6 +234,7 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
           setDeepDiveData(null)
           setGeneratingPaper(null)
         }}
+        onRegenerate={regenerateDeepDive}
       />
     )
   }
@@ -156,21 +252,33 @@ export function ResearchTab({ initialPaper, onPaperClick }: ResearchTabProps) {
           </p>
         </div>
 
-        {/* Search bar */}
+        {/* Search bar — Premium Redesign */}
         <div className="research-search-wrap">
-          <div className="research-search-bar">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+          <div className="premium-search-bar">
+            <div className="premium-search-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
             <input
               type="text"
-              className="research-search-input"
+              className="premium-search-input"
               placeholder="Search papers on arXiv... e.g. 'vision transformer', 'federated learning'"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               autoFocus
             />
+            {searchQuery && (
+              <button
+                className="premium-search-clear"
+                onClick={() => setSearchQuery('')}
+                title="Clear search"
+                style={{ marginRight: isSearching ? 8 : 0 }}
+              >
+                &times;
+              </button>
+            )}
             {isSearching && <div className="loading-spinner" style={{ width: 16, height: 16 }} />}
           </div>
         </div>

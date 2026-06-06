@@ -167,6 +167,13 @@ def _parse_hf_response_data(data: list) -> list[Paper]:
 
         tags = _guess_tags(title + " " + summary)
 
+        code_url = paper_data.get("githubRepo")
+        github_stars = paper_data.get("githubStars", 0)
+        
+        # Fallback to regex if not found in daily metadata
+        if not code_url:
+            code_url = extract_github_url(summary) or extract_github_url(title)
+
         papers.append(Paper(
             id=arxiv_id,
             title=title,
@@ -175,11 +182,13 @@ def _parse_hf_response_data(data: list) -> list[Paper]:
             date=pub_date,
             source="huggingface",
             url=f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "",
-            score=upvotes * 10,
+            score=int(upvotes * 10 + (github_stars * 0.5)),
             hf_upvotes=upvotes,
             category=tags[0] if tags else "Machine Learning",
             tags=tags,
             pdf_url=f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else "",
+            code_url=code_url,
+            github_stars=github_stars,
         ))
     return papers
 
@@ -208,6 +217,24 @@ async def fetch_huggingface_daily(client: httpx.AsyncClient) -> list[Paper]:
         logger.error(f"HF daily papers fetch failed: {e}")
 
     return papers
+
+
+async def search_huggingface(client: httpx.AsyncClient, query: str) -> list[Paper]:
+    """Search HuggingFace papers API for matching papers."""
+    url = "https://huggingface.co/api/papers/search"
+    params = {"q": query}
+    try:
+        resp = await client.get(url, params=params, timeout=10.0)
+        if resp.status_code == 200:
+            papers = _parse_hf_response_data(resp.json())
+            logger.info(f"HuggingFace papers search '{query}': {len(papers)} results")
+            return papers
+        else:
+            logger.warning(f"HuggingFace search returned status {resp.status_code} for '{query}'")
+    except Exception as e:
+        logger.warning(f"HuggingFace papers search failed for '{query}': {e}")
+    return []
+
 
 async def crawl_huggingface_historical(
     client: httpx.AsyncClient,
@@ -430,11 +457,10 @@ async def search_arxiv(
     if is_arxiv_id:
         params["id_list"] = clean_q
     else:
-        keywords = [kw for kw in clean_q.split() if kw]
-        if keywords:
-            search_query = " AND ".join(f"all:{kw}" for kw in keywords)
+        if len(clean_q.split()) > 1:
+            search_query = f'ti:"{clean_q}" OR abs:"{clean_q}"'
         else:
-            search_query = f'ti:"{query}" OR abs:"{query}"'
+            search_query = f'all:{clean_q}'
         params["search_query"] = search_query
         params["sortBy"] = "relevance"
         params["sortOrder"] = "descending"
@@ -604,6 +630,8 @@ def _parse_arxiv_response(xml_text: str, default_category: str = "") -> list[Pap
 
 _is_refreshing = False
 
+IS_LAMBDA = "AWS_LAMBDA_FUNCTION_NAME" in os.environ
+
 async def get_trending_papers(client: httpx.AsyncClient) -> list[Paper]:
     """
     Get trending papers by querying the SQLite database.
@@ -619,7 +647,8 @@ async def get_trending_papers(client: httpx.AsyncClient) -> list[Paper]:
     if not db_results:
         logger.info("Database is empty on query. Starting background refresh...")
         # Trigger async refresh in background to prevent HTTP lockup/timeout
-        _trigger_background_refresh(client)
+        if not IS_LAMBDA:
+            _trigger_background_refresh(client)
         
         # Load local disk cache if present as instant fallback, otherwise return empty list
         fallback = load_cached_papers()
@@ -628,7 +657,8 @@ async def get_trending_papers(client: httpx.AsyncClient) -> list[Paper]:
         return []
     else:
         # DB has papers, trigger background refresh if needed
-        _trigger_background_refresh(client)
+        if not IS_LAMBDA:
+            _trigger_background_refresh(client)
 
     # Convert SQLite dict rows back to Paper instances
     papers = []
@@ -700,8 +730,8 @@ async def _refresh_papers_now(client: httpx.AsyncClient) -> list[Paper]:
         conn.close()
 
         if hf_count < 100:
-            logger.info(f"HuggingFace papers count in DB ({hf_count}) is low. Backfilling 30 days...")
-            hf_historical = await crawl_huggingface_historical(client, days_back=30)
+            logger.info(f"HuggingFace papers count in DB ({hf_count}) is low. Backfilling 90 days...")
+            hf_historical = await crawl_huggingface_historical(client, days_back=90)
             hf_papers.extend(hf_historical)
     except Exception as e:
         logger.error(f"Failed checking/backfilling HF historical papers: {e}")
@@ -804,7 +834,10 @@ async def _refresh_papers_now(client: httpx.AsyncClient) -> list[Paper]:
     # Write legacy cache
     try:
         sorted_papers = sorted(all_papers_dict.values(), key=lambda x: x.score, reverse=True)
-        cache_dir = Path(__file__).parent.parent.parent / "data" / "cache"
+        if "AWS_LAMBDA_FUNCTION_NAME" in os.environ:
+            cache_dir = Path("/tmp/cache")
+        else:
+            cache_dir = Path(__file__).parent.parent.parent / "data" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / "papers.json"
         cache_file.write_text(json.dumps([p.to_dict() for p in sorted_papers[:200]], indent=2))

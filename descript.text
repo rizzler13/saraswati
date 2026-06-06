@@ -1,0 +1,93 @@
+# Project Saraswati
+
+Realtime Research Radar. Monitors scientific knowledge flow, crawls new research, tracks code repository signals, and provides an agentic deep-dive explanation engine.
+
+---
+
+## Key Features & Latest Updates
+
+- **High-Scale Ingestion**: Crawls arXiv categories (`cs.AI`, `cs.LG`, `cs.CL`, `cs.CV`, `cs.MA`, etc.) and Hugging Face daily trending entries with automated rate-limiting queue controls.
+- **Papers with Code Alignment**: Automatically parses and extracts GitHub repositories from abstracts, fetching stars, forks, and star growth rates (velocity).
+- **Dynamic Ranking Engine**: Ranks papers dynamically based on:
+  $$\text{Score} = (\text{HF Upvotes} \times 10) + (\text{GitHub Stars} \times 0.5) + \text{Velocity}$$
+- **Agentic Chat & Interactive Explanations**: Dedicated AI Agent chat tab to discuss paper contents with routing optimized across Groq, OpenRouter, and Cerebras APIs.
+- **Figures Extraction & Smart Crop Filtering**: Extracts high-resolution figures directly from papers using PyMuPDF. Features smart filtering to exclude running headers, page footers, small inline decorations/icons (width < 120pt, height < 80pt), and Page 1 header logos, with precise vector drawing bounding-box cropping.
+- **Interactive Architecture Flowcharts**: Automatically parses and generates high-substance model subgraphs using **Mermaid.js**, adapting dynamically to light mode (magazine-like cream style) and dark mode (charcoal background with terracotta highlights) with overflow scrolling and node hover effects.
+- **Forced Regeneration**: Supports active cache bypass to trigger a forced recalculation of deep dives directly from the UI.
+- **Mobile In-App Browser Recovery (WebView Escape Hatch)**: Gracefully handles in-app WebViews (e.g. LinkedIn, Instagram, Facebook) where Google Auth blocks authentication. Proactively displays guidance and provides a cross-platform escape hatch: Android Chrome intent redirects, iOS URL copy-paste helpers, and visual toolbar tips.
+
+---
+
+## Tech Stack & Architecture
+
+- **Frontend**: React + Vite, Tailwind-like custom HSL/CSS design token system, responsive HUD layouts, custom KaTeX math block renderers, and Mermaid diagram renderers.
+- **Backend**: FastAPI + Uvicorn + LiteLLM, structured JSON agents, multi-agent orchestrator, and local SQLite data store (`data/saraswati.db`).
+- **Deployment**: AWS Serverless Lambda (Docker container) for the backend, S3 + CloudFront static site hosting for the frontend, with automated deploy and invalidation scripts.
+
+---
+
+## Quick Start (Local Environment)
+
+### Prerequisites
+- Python 3.11 or higher
+- Node.js (v18+) and npm
+- A Groq API Key (and optionally Cerebras or OpenRouter keys for upgraded reasoning)
+
+### 1. Set Up Environment Variables
+Create a `.env` file in the root directory:
+```env
+GROQ_API_KEY=gsk_...
+# Optional keys:
+CEREBRAS_API_KEY=csk_...
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+### 2. Run the Backend
+```bash
+# Set up a Python virtual environment
+cd research
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the FastAPI server (run from the project root directory)
+cd ..
+python -m uvicorn research.server:app --host 0.0.0.0 --port 8081
+```
+
+### 3. Run the Frontend
+```bash
+# In a new terminal tab/window
+cd ui
+npm install
+npm run dev
+```
+
+Open your browser to [http://localhost:5173](http://localhost:5173) to access the dashboard.
+
+---
+
+## Production Deployment to AWS
+
+The codebase includes full support for serverless AWS deployment:
+- **Backend (Lambda + ECR)**: Built as a Docker image and deployed to AWS Lambda using Python and `boto3` (`deploy_aws.py`).
+- **Frontend (S3 + CloudFront)**: Built and synced automatically using `deploy_frontend.py` which resolves API Gateway endpoints, updates the config dynamically, uploads assets to S3, and invalidates the CloudFront CDN cache.
+
+To deploy the stack:
+```bash
+# Build and deploy both backend and frontend to AWS
+python deploy_aws.py
+```
+
+---
+
+## Useful Commands
+
+- **Backend healthcheck**: `curl http://localhost:8081/health`
+- **FastAPI OpenAPI docs**: [http://localhost:8081/docs](http://localhost:8081/docs)
+
+## License
+
+MIT License

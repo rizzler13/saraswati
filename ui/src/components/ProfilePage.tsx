@@ -11,9 +11,9 @@ interface ProfilePageProps {
 export function ProfilePage({ onOpenChat, onOpenDeepDive }: ProfilePageProps) {
   const { user, logout, configured, chats, deepDives, loading } = useAuth()
 
-  // Filter out global chat and sort in JS
+  // Filter out empty global chat and sort in JS
   const paperChats = [...chats]
-    .filter(chat => chat.paperId !== 'global')
+    .filter(chat => chat.paperId !== 'global' || (chat.messages && chat.messages.length > 0))
     .sort((a, b) => b.updatedAt - a.updatedAt)
 
   const sortedDives = [...deepDives]
@@ -138,10 +138,10 @@ export function ProfilePage({ onOpenChat, onOpenDeepDive }: ProfilePageProps) {
                     onClick={() => onOpenChat({ id: chat.paperId, title: chat.paperTitle })}
                   >
                     <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.4 }}>
-                      {chat.paperTitle}
+                      {chat.paperId === 'global' ? 'General Agent Chat' : chat.paperTitle}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
-                      <span>arXiv: {chat.paperId}</span>
+                      <span>{chat.paperId === 'global' ? 'General Inquiry' : `arXiv: ${chat.paperId}`}</span>
                       <span>{new Date(chat.updatedAt).toLocaleDateString()}</span>
                     </div>
                   </div>

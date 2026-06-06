@@ -11,8 +11,19 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   type User,
 } from 'firebase/auth'
+
+/**
+ * Detect in-app browsers (LinkedIn, Instagram, Facebook, etc.)
+ * that use embedded WebViews which Google blocks for OAuth.
+ */
+export function isInAppBrowser(): boolean {
+  const ua = navigator.userAgent || navigator.vendor || ''
+  return /FBAN|FBAV|Instagram|LinkedIn|Snapchat|Twitter|Line\/|MicroMessenger|WeChat|GSA\/|\bwv\b/i.test(ua)
+}
 import {
   doc,
   setDoc,
@@ -95,12 +106,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [deepDives, setDeepDives] = useState<DeepDiveRecord[]>([])
   const configured = isConfigured()
 
-  // Listen to auth state
+  // Listen to auth state + handle redirect results from in-app browser OAuth
   useEffect(() => {
     if (!configured || !auth) {
       setLoading(false)
       return
     }
+
+    // Handle returning from signInWithRedirect (in-app browser flow)
+    getRedirectResult(auth).catch((err) => {
+      console.warn('Redirect sign-in error:', err?.message)
+    })
+
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u)
       if (u && db) {
@@ -149,7 +166,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async () => {
     if (!auth) throw new Error('Firebase not configured')
     const provider = new GoogleAuthProvider()
-    await signInWithPopup(auth, provider)
+
+    // In-app browsers (LinkedIn, IG, etc.) block Google OAuth.
+    // Throw a direct error so the UI stays open and displays the escape hatch
+    // instead of redirecting the page to a Google 403 page.
+    if (isInAppBrowser()) {
+      throw {
+        code: 'auth/disallowed-useragent',
+        message: 'Google sign-in is blocked in WebViews (disallowed_useragent).'
+      }
+    }
+
+    try {
+      await signInWithPopup(auth, provider)
+    } catch (err: any) {
+      // Fallback: if popup is blocked or fails, try redirect (only if not an in-app webview)
+      if (
+        err?.code === 'auth/popup-blocked' ||
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.message?.includes('disallowed_useragent')
+      ) {
+        // If we still get a disallowed useragent, throw it to show help
+        if (err?.message?.includes('disallowed_useragent') || err?.code === 'auth/disallowed-useragent') {
+          throw err
+        }
+        await signInWithRedirect(auth, provider)
+        return
+      }
+      throw err
+    }
   }
 
   const logout = async () => {
@@ -229,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const updatedChat: ChatSession = {
         paperId,
-        paperTitle: existing?.paperTitle || (paperId === 'global' ? 'Global Session' : 'Untitled Chat'),
+        paperTitle: existing?.paperTitle || attachedPaper?.title || (paperId === 'global' ? 'Global Session' : 'Untitled Chat'),
         messages: existing?.messages || [],
         attachedPaper,
         updatedAt: Date.now()

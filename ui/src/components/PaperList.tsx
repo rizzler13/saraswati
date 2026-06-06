@@ -97,12 +97,54 @@ function computeStarsPerHour(paper: Paper): string {
 }
 
 const CATEGORIES_LIST = [
-  "Agents", "Machine Learning", "NLP", "Computer Vision", "Multi-Agent", "Robotics",
-  "Sound & Audio", "Neural & Evolutionary", "Information Retrieval", "Human-Computer Interaction",
-  "Cryptography & Security", "Distributed Computing", "Software Engineering", "Graphics",
-  "Multimedia", "Social Networks", "Audio & Speech", "Image & Video", "Signal Processing",
-  "Computational Neuroscience", "Optimization", "Quantum Computing", "Data Analysis"
-];
+  "Agents",
+  "Machine Learning",
+  "NLP",
+  "Computer Vision",
+  "Multi-Agent",
+  "Robotics",
+  "Sound & Audio",
+  "Neural & Evolutionary",
+  "Information Retrieval",
+  "Human-Computer Interaction",
+  "Cryptography & Security",
+  "Distributed Computing",
+  "Software Engineering",
+  "Graphics",
+  "Multimedia",
+  "Social Networks",
+  "Audio & Speech",
+  "Image & Video",
+  "Signal Processing",
+  "Computational Neuroscience",
+  "Optimization",
+  "Quantum Computing",
+  "Data Analysis",
+  "LLM",
+  "Transformers",
+  "Diffusion",
+  "Generative AI",
+  "Reasoning",
+  "Reinforcement Learning",
+  "3D Vision",
+  "Video AI",
+  "Segmentation",
+  "Multimodal",
+  "RAG",
+  "Translation",
+  "Speech & Audio",
+  "Medical AI",
+  "Autonomous Systems",
+  "Code",
+  "Fine-Tuning",
+  "Safety",
+  "MoE",
+  "Efficient AI",
+  "Graph Networks",
+  "Federated",
+  "Time Series",
+  "Neuro-Symbolic"
+]
 
 function isCategory(q: string): boolean {
   return CATEGORIES_LIST.some(cat => cat.toLowerCase() === q.toLowerCase());
@@ -170,6 +212,17 @@ export function PaperList({ onPaperClick, searchQuery }: PaperListProps) {
     fetchPapers(page)
   }, [page, searchQuery, fetchPapers])
 
+  // Poll for papers on startup if empty and no active search filter
+  useEffect(() => {
+    if (papers.length > 0 || searchQuery.trim() || loading) return
+
+    const interval = setInterval(() => {
+      fetchPapers(1)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [papers.length, searchQuery, loading, fetchPapers])
+
   // Scroll observer target for infinite scroll
   const observerTarget = useRef<HTMLDivElement>(null)
 
@@ -197,6 +250,21 @@ export function PaperList({ onPaperClick, searchQuery }: PaperListProps) {
     }
   }, [hasMore, loading])
 
+  // Initial loading/indexing spinner when no papers exist at all on home load
+  if (papers.length === 0 && !searchQuery.trim()) {
+    return (
+      <div className="empty-state" style={{ minHeight: 320, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="loading-spinner" style={{ width: 28, height: 28 }} />
+        <div style={{ marginTop: 16, fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>
+          Initializing trending feed...
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          Fetching the latest top papers with code. This may take a moment.
+        </div>
+      </div>
+    )
+  }
+
   if (papers.length === 0 && loading && page === 1) {
     return (
       <div className="empty-state">
@@ -208,7 +276,7 @@ export function PaperList({ onPaperClick, searchQuery }: PaperListProps) {
 
   if (error && papers.length === 0) {
     return (
-      <div className="empty-state" style={{ color: 'var(--text-accent)' }}>
+      <div className="empty-state" style={{ color: 'var(--accent-primary)' }}>
         Error loading papers: {error}
       </div>
     )

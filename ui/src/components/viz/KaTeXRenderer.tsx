@@ -41,45 +41,53 @@ export function KaTeXRenderer({ latex, display = true }: KaTeXProps) {
 export function MixedMathRenderer({ text }: { text: string }) {
   if (!text) return null
 
-  // Split on $$...$$ (display) and $...$ (inline)
-  const parts: { type: 'text' | 'inline' | 'display'; value: string }[] = []
-  let remaining = text
+  const mathBlocks: { type: 'inline' | 'display'; value: string }[] = []
+  let placeholderCounter = 0
+  let tokenizedText = text
 
-  while (remaining.length > 0) {
-    // Check for display math first ($$...$$)
-    const displayMatch = remaining.match(/\$\$([\s\S]*?)\$\$/)
-    const inlineMatch = remaining.match(/\$([^\$\n]+?)\$/)
+  // Extract display math ($$...$$ and \[...\])
+  tokenizedText = tokenizedText.replace(/\$\$([\s\S]*?)\$\$/g, (_match, p1) => {
+    const placeholder = `__MATH_DISPLAY_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'display', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
+  tokenizedText = tokenizedText.replace(/\\\[([\s\S]*?)\\\]/g, (_match, p1) => {
+    const placeholder = `__MATH_DISPLAY_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'display', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
 
-    if (displayMatch && (!inlineMatch || displayMatch.index! <= inlineMatch.index!)) {
-      const idx = displayMatch.index!
-      if (idx > 0) {
-        parts.push({ type: 'text', value: remaining.slice(0, idx) })
-      }
-      parts.push({ type: 'display', value: displayMatch[1] })
-      remaining = remaining.slice(idx + displayMatch[0].length)
-    } else if (inlineMatch) {
-      const idx = inlineMatch.index!
-      if (idx > 0) {
-        parts.push({ type: 'text', value: remaining.slice(0, idx) })
-      }
-      parts.push({ type: 'inline', value: inlineMatch[1] })
-      remaining = remaining.slice(idx + inlineMatch[0].length)
-    } else {
-      parts.push({ type: 'text', value: remaining })
-      break
-    }
-  }
+  // Extract inline math ($...$ and \(...\))
+  tokenizedText = tokenizedText.replace(/\$([^\$\n]+?)\$/g, (_match, p1) => {
+    const placeholder = `__MATH_INLINE_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'inline', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
+  tokenizedText = tokenizedText.replace(/\\\(([\s\S]*?)\\\)/g, (_match, p1) => {
+    const placeholder = `__MATH_INLINE_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'inline', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
+
+  // Split and render
+  const regex = /(__MATH_(?:INLINE|DISPLAY)_\d+__)/g
+  const parts = tokenizedText.split(regex)
 
   return (
     <span>
-      {parts.map((part, i) => {
-        if (part.type === 'display') {
-          return <KaTeXRenderer key={i} latex={part.value} display={true} />
+      {parts.map((part, index) => {
+        const match = part.match(/__MATH_(INLINE|DISPLAY)_(\d+)__/)
+        if (match) {
+          const type = match[1].toLowerCase() as 'inline' | 'display'
+          const id = parseInt(match[2], 10)
+          const mathVal = mathBlocks[id].value
+          return <KaTeXRenderer key={index} latex={mathVal} display={type === 'display'} />
         }
-        if (part.type === 'inline') {
-          return <KaTeXRenderer key={i} latex={part.value} display={false} />
-        }
-        return <span key={i}>{part.value}</span>
+        return <span key={index}>{part}</span>
       })}
     </span>
   )
@@ -97,16 +105,28 @@ export function MarkdownMathRenderer({ text }: { text: string }) {
   
   let tokenizedText = text
   
-  // First, extract display math ($$...$$)
+  // Extract display math ($$...$$ and \[...\])
   tokenizedText = tokenizedText.replace(/\$\$([\s\S]*?)\$\$/g, (_match, p1) => {
     const placeholder = `__MATH_DISPLAY_${placeholderCounter}__`
     mathBlocks[placeholderCounter] = { type: 'display', value: p1 }
     placeholderCounter++
     return placeholder
   })
+  tokenizedText = tokenizedText.replace(/\\\[([\s\S]*?)\\\]/g, (_match, p1) => {
+    const placeholder = `__MATH_DISPLAY_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'display', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
   
-  // Next, extract inline math ($...$)
+  // Extract inline math ($...$ and \(...\))
   tokenizedText = tokenizedText.replace(/\$([^\$\n]+?)\$/g, (_match, p1) => {
+    const placeholder = `__MATH_INLINE_${placeholderCounter}__`
+    mathBlocks[placeholderCounter] = { type: 'inline', value: p1 }
+    placeholderCounter++
+    return placeholder
+  })
+  tokenizedText = tokenizedText.replace(/\\\(([\s\S]*?)\\\)/g, (_match, p1) => {
     const placeholder = `__MATH_INLINE_${placeholderCounter}__`
     mathBlocks[placeholderCounter] = { type: 'inline', value: p1 }
     placeholderCounter++
@@ -146,19 +166,47 @@ export function MarkdownMathRenderer({ text }: { text: string }) {
     })
   }
 
-  // 2. Parse block level (headings, paragraphs, lists)
+  // 2. Parse block level (headings, paragraphs, lists, code blocks)
   const lines = tokenizedText.split('\n')
   
   interface Block {
-    type: 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'ul' | 'ol' | 'spacer'
+    type: 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'ul' | 'ol' | 'spacer' | 'code'
     content: string | string[]
+    language?: string
   }
 
   const blocks: Block[] = []
   let currentList: { type: 'ul' | 'ol'; items: string[] } | null = null
+  let inCodeBlock = false
+  let codeLines: string[] = []
+  let codeLanguage = ''
 
   for (const line of lines) {
     const trimmed = line.trim()
+
+    // Check code block tag
+    if (trimmed.startsWith('```')) {
+      if (inCodeBlock) {
+        blocks.push({ type: 'code', content: codeLines.join('\n'), language: codeLanguage })
+        codeLines = []
+        codeLanguage = ''
+        inCodeBlock = false
+      } else {
+        if (currentList) {
+          blocks.push({ type: currentList.type, content: currentList.items })
+          currentList = null
+        }
+        codeLanguage = trimmed.slice(3).trim()
+        inCodeBlock = true
+      }
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line)
+      continue
+    }
+
     if (!trimmed) {
       if (currentList) {
         blocks.push({ type: currentList.type, content: currentList.items })
@@ -218,8 +266,10 @@ export function MarkdownMathRenderer({ text }: { text: string }) {
     }
   }
 
-  // Flush any final list
-  if (currentList) {
+  // Flush any final list or code block
+  if (inCodeBlock) {
+    blocks.push({ type: 'code', content: codeLines.join('\n'), language: codeLanguage })
+  } else if (currentList) {
     blocks.push({ type: currentList.type, content: currentList.items })
   }
 
@@ -258,6 +308,30 @@ export function MarkdownMathRenderer({ text }: { text: string }) {
                   </li>
                 ))}
               </ol>
+            )
+          case 'code':
+            return (
+              <pre key={i} className="code-block-container" style={{
+                background: 'var(--bg-secondary)', color: 'var(--text-body)', padding: '16px 20px',
+                borderRadius: '8px', overflowX: 'auto', fontFamily: 'var(--font-mono)',
+                fontSize: '13px', margin: '14px 0', border: '1px solid var(--border)',
+                position: 'relative'
+              }}>
+                {block.language && (
+                  <div style={{
+                    position: 'absolute', right: '14px', top: '8px',
+                    fontSize: '10px', textTransform: 'uppercase', color: 'var(--accent-primary)',
+                    background: 'rgba(201, 85, 58, 0.06)', padding: '2px 8px',
+                    borderRadius: '4px', border: '1px solid rgba(201, 85, 58, 0.1)',
+                    fontWeight: 600, letterSpacing: '0.8px'
+                  }}>
+                    {block.language}
+                  </div>
+                )}
+                <code style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'pre', display: 'block', lineHeight: 1.5 }}>
+                  {block.content}
+                </code>
+              </pre>
             )
           default:
             return null
