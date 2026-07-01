@@ -201,25 +201,25 @@ def get_latest_paper_date(category: str) -> Optional[str]:
     return None
 
 def query_trending_papers(page: int = 1, limit: int = 50, category: Optional[str] = None) -> list[dict]:
-    """Retrieve trending papers matching category, with pagination."""
+    """Retrieve trending papers matching category, with pagination and time-decay ranking."""
     conn = get_connection()
     cursor = get_cursor(conn)
 
-    offset = (page - 1) * limit
     params: list[Any] = []
-
     sql = "SELECT * FROM papers"
     if category and category.strip():
         sql += " WHERE LOWER(category) = LOWER(?)"
         params.append(category.strip())
 
-    sql += " ORDER BY score DESC, date DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-
     cursor.execute(get_placeholder(sql), params)
     rows = cursor.fetchall()
     conn.close()
 
+    import math
+    import time
+    from datetime import datetime
+
+    now = int(time.time())
     results = []
     for r in rows:
         d = dict(r)
@@ -231,9 +231,24 @@ def query_trending_papers(page: int = 1, limit: int = 50, category: Optional[str
             d["tags"] = json.loads(d["tags"])
         except Exception:
             d["tags"] = []
+
+        try:
+            pub_dt = datetime.strptime(d["date"], "%Y-%m-%d")
+            pub_epoch = int(pub_dt.timestamp())
+        except Exception:
+            pub_epoch = d.get("fetched_at") or now
+
+        age_hours = max(0.0, (now - pub_epoch) / 3600.0)
+        
+        raw_score = d.get("score") or 0
+        trending_score = raw_score / math.pow(age_hours + 2.0, 1.8)
+        d["score"] = int(trending_score)
         results.append(d)
 
-    return results
+    results.sort(key=lambda x: x["score"], reverse=True)
+
+    offset = (page - 1) * limit
+    return results[offset:offset + limit]
 
 def search_local_papers(query: str, limit: int = 50) -> list[dict]:
     """Search local database for papers matching query in title or abstract."""
